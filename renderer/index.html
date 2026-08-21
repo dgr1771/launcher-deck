@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+<title>应用牌堆</title>
+<link rel="stylesheet" href="deck.css">
+</head>
+<body>
+<div id="panel">
+  <header id="titlebar">
+    <h1><span class="suit">🃏</span>应用牌堆<span class="mode-tag" id="modeTag">· 塔罗牌阵</span></h1>
+    <div class="sub" id="subtitle">正在召集本机程序…</div>
+    <div class="hint" id="hint">Ctrl+J 收起 · 悬停看牌面 · 点击启动</div>
+  </header>
+
+  <div class="toolbar">
+    <button class="tbtn" id="btnMode" title="切换启动 / 游戏">🎮 游戏模式</button>
+    <button class="tbtn gold" id="btnFortune" title="每日一抽：今天适合开哪个应用">🎴 今日一抽</button>
+    <button class="tbtn" id="btnSearch" title="兜底搜索：不想翻的时候">🔍</button>
+    <div class="searchbox" id="searchbox">
+      <span style="font-size:12px;opacity:.5">🔍</span>
+      <input id="searchInput" type="text" placeholder="兜底搜索（可不用）…">
+    </div>
+    <div class="gamebtns" id="gameBtns" style="display:none">
+      <button class="tbtn" id="btnUndo" title="悔一步棋（Ctrl+Z）">↩ 悔棋</button>
+      <button class="tbtn" id="btnNewGame" title="重新发一局">🆕 新局</button>
+      <span class="movecount" id="moveCount">0 步</span>
+    </div>
+    <button class="tbtn" id="btnTheme" title="外观主题：玻璃/配色/图片背板/牌背">🎨</button>
+    <button class="tbtn" id="btnHotkey" title="修改全局快捷键">⌨</button>
+    <button class="tbtn" id="btnSound" title="音效开关">🔊</button>
+    <button class="tbtn" id="btnClose" title="收起（Ctrl+J）">✕</button>
+  </div>
+
+  <!-- 塔罗牌阵（启动模式） -->
+  <div id="tarot">
+    <div class="chips" id="chips"></div>
+    <div id="grid"></div>
+    <div id="searchResult"></div>
+  </div>
+
+  <!-- FreeCell 牌桌（游戏模式） -->
+  <div id="fcboard">
+    <div class="slots" id="slotCells"></div>
+    <div class="slots slots--right" id="slotFound"></div>
+    <div id="columns"></div>
+  </div>
+</div>
+
+<div id="fortunePop"><div class="fcard-box" id="fortuneBox"></div></div>
+<div id="winPop"><div class="fcard-box" id="winBox"></div></div>
+<div id="toast"></div>
+
+<script src="deck.js"></script>
+</body>
+</html>
