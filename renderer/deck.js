@@ -496,7 +496,10 @@ function applyTheme() {
    '--panel-backdrop', '--panel-shadow', '--accent-color',
    '--cardback-img', '--cardback-under', '--cardback-color', '--cardback-size'].forEach(v => r.removeProperty(v));
   if (t.preset === 'glass') {
-    // 蒂芙尼蓝 × 粉 毛玻璃：染色半透明底 + 强模糊提饱和 + 白高光描边，深浅桌面都保证可读
+    // 蒂芙尼蓝 × 粉 毛玻璃：染色渐变 + 强模糊提饱和 + 白高光描边
+    // 深色底漆（bg-color 垫在 background-image 渐变之下）：白/浅色桌面也保证白字可读——
+    // 透明染色层只对深壁纸有效，纯透曾导致浅色桌面下界面看不清
+    r.setProperty('--panel-bg-color', 'rgba(7, 13, 17, 0.55)');
     r.setProperty('--panel-img', 'linear-gradient(160deg, rgba(10, 186, 181, 0.26) 0%, rgba(255, 123, 172, 0.16) 100%)');
     r.setProperty('--panel-border', 'rgba(255, 255, 255, 0.45)');
     r.setProperty('--panel-backdrop', 'blur(18px) saturate(170%)');
@@ -507,26 +510,12 @@ function applyTheme() {
     r.setProperty('--cardback-under', 'linear-gradient(150deg, rgba(10, 186, 181, 0.55) 0%, rgba(255, 123, 172, 0.42) 100%)');
     r.setProperty('--cardback-color', 'rgba(9, 34, 38, 0.72)');
   } else if (t.preset === 'custom') {
-    // 背板：图片 > 纯色；图片上叠遮罩（浓度滑条）避免文字看不清
-    const fit = { cover: 'cover', contain: 'contain', tile: 'auto' }[t.panelFit || 'cover'];
-    if (t.panelImage) {
-      r.setProperty('--panel-img', `url("${t.panelImage}")`);
-      r.setProperty('--panel-bg-size', fit === 'auto' ? 'auto' : fit);
-      if (fit === 'tile') r.setProperty('--panel-blur', '0px');
-    } else if (t.panelColor) {
+    // 自定义 = 纯配色（图片背板/牌背上传已砍除：可读性代价大、收益低，用户决策 2026-08-22）
+    if (t.panelColor) {
       r.setProperty('--panel-img', 'none');
       r.setProperty('--panel-bg-color', t.panelColor);
     }
-    if (t.panelImage && typeof t.panelMask === 'number') {
-      r.setProperty('--panel-bg-color', `rgba(5, 8, 14, ${t.panelMask})`);
-    }
-    // 牌背
-    const cfit = { cover: 'cover', contain: 'contain', tile: 'auto' }[t.cardFit || 'cover'];
-    if (t.cardImage) {
-      r.setProperty('--cardback-img', `url("${t.cardImage}")`);
-      r.setProperty('--cardback-under', 'none');
-      r.setProperty('--cardback-size', cfit === 'auto' ? '30%' : cfit);
-    } else if (t.cardColor) {
+    if (t.cardColor) {
       r.setProperty('--cardback-img', 'none');
       r.setProperty('--cardback-under', 'none');
       r.setProperty('--cardback-color', t.cardColor);
@@ -534,26 +523,7 @@ function applyTheme() {
   }
 }
 
-/** 图片压缩：最长边 ≤1600，JPEG 0.82（localStorage 5MB 限制） */
-function compressImage(file, cb) {
-  const reader = new FileReader();
-  reader.onload = () => {
-    const img = new Image();
-    img.onload = () => {
-      const MAX = 1600;
-      const scale = Math.min(1, MAX / Math.max(img.width, img.height));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-      cb(canvas.toDataURL('image/jpeg', 0.82));
-    };
-    img.onerror = () => cb(null);
-    img.src = reader.result;
-  };
-  reader.readAsDataURL(file);
-}
-
+/** 主题弹层：预设 + 自定义配色（图片背板/牌背上传已砍除——用户决策 2026-08-22） */
 function openThemeModal() {
   let modal = document.getElementById('themeModal');
   if (modal) modal.remove();
@@ -561,8 +531,6 @@ function openThemeModal() {
   modal = document.createElement('div');
   modal.id = 'themeModal';
   modal.className = 'catmodal-pop';
-  const fitBtns = (which, cur) => [['cover', '填充'], ['contain', '完整'], ['tile', '平铺']]
-    .map(([v, n]) => `<span class="fitb${cur === v ? ' on' : ''}" data-which="${which}" data-fit="${v}">${n}</span>`).join('');
   modal.innerHTML = `
     <div class="catmodal thememodal">
       <div class="catmodal__title">🎨 外观主题</div>
@@ -575,80 +543,38 @@ function openThemeModal() {
         </div>
       </div>
       <div class="sep"></div>
-      <div class="title2">背板</div>
+      <div class="title2">自定义配色</div>
       <div class="row">
-        <label>底色</label>
+        <label>面板底色</label>
         <input type="color" id="tmPanelColor" value="${t.panelColor || '#0c1210'}">
-        <label>遮罩</label>
-        <input type="range" id="tmMask" min="0" max="80" value="${Math.round((t.panelMask ?? 0.35) * 100)}">
       </div>
       <div class="row">
-        <button class="upbtn" id="tmPanelImg">上传背板图片</button>
-        <span class="upinfo">${t.panelImage ? '已设置图片（自动压缩防失真）' : 'JPG/PNG，自动缩放'}</span>
-      </div>
-      <div class="row">
-        <label>适配</label>
-        <div class="fitbtns">${fitBtns('panel', t.panelFit || 'cover')}</div>
-      </div>
-      <div class="sep"></div>
-      <div class="title2">塔罗牌背</div>
-      <div class="row">
-        <label>底色</label>
+        <label>牌背底色</label>
         <input type="color" id="tmCardColor" value="${t.cardColor || '#1a2038'}">
       </div>
-      <div class="row">
-        <button class="upbtn" id="tmCardImg">上传牌背图片</button>
-        <span class="upinfo">${t.cardImage ? '已设置图片' : '自动按牌比例适配'}</span>
-      </div>
-      <div class="row">
-        <label>适配</label>
-        <div class="fitbtns">${fitBtns('card', t.cardFit || 'cover')}</div>
-      </div>
+      <div class="catmodal__hint">调整配色会自动切到「🎨 自定义」预设</div>
       <div class="catmodal__btns">
         <button class="plain" data-act="reset">恢复默认</button>
-        <button class="plain" data-act="clearimg" id="tmClearImg">清除图片</button>
         <button data-act="ok">应 用</button>
       </div>
     </div>`;
   document.body.appendChild(modal);
   later(() => modal.classList.add('open'));
   Sound.flip();
-
-  const hidden = document.createElement('input');
-  hidden.type = 'file';
-  hidden.accept = 'image/*';
-  hidden.style.display = 'none';
-  modal.appendChild(hidden);
-  let pending = { panelImage: undefined, cardImage: undefined };
-  // 文件对话框会抢焦点 → 面板失焦自动收起会把对话框一起关掉：选择期间挂起收起
-  const resumeHide = () => { try { window.deck.suspendHide(false); } catch (e) {} };
-  hidden.addEventListener('change', () => {
-    const f = hidden.files && hidden.files[0];
-    if (!f) { resumeHide(); return; }
-    const which = hidden.dataset.which;
-    compressImage(f, (dataUrl) => {
-      resumeHide();
-      if (!dataUrl) { toast('图片读取失败'); return; }
-      if (which === 'panel') { pending.panelImage = dataUrl; modal.querySelector('#tmPanelImg + .upinfo').textContent = '已设置（待应用）'; }
-      else { pending.cardImage = dataUrl; modal.querySelector('#tmCardImg + .upinfo').textContent = '已设置（待应用）'; }
-      toast('图片已就绪，点「应 用」生效');
-    });
-    hidden.value = '';
-  });
-  hidden.addEventListener('cancel', resumeHide);
-  modal.querySelector('#tmPanelImg').addEventListener('click', () => { hidden.dataset.which = 'panel'; try { window.deck.suspendHide(true); } catch (e) {} hidden.click(); });
-  modal.querySelector('#tmCardImg').addEventListener('click', () => { hidden.dataset.which = 'card'; try { window.deck.suspendHide(true); } catch (e) {} hidden.click(); });
-  // 弹层任何方式关闭时恢复（防挂起泄漏导致面板永远不自动收起）
-  const origRemove = modal.remove.bind(modal);
-  modal.remove = () => { resumeHide(); origRemove(); };
   modal.querySelectorAll('.preset').forEach(p => p.addEventListener('click', () => {
     modal.querySelectorAll('.preset').forEach(x => x.classList.remove('on'));
     p.classList.add('on');
   }));
-  modal.querySelectorAll('.fitb').forEach(b => b.addEventListener('click', () => {
-    modal.querySelectorAll(`.fitb[data-which="${b.dataset.which}"]`).forEach(x => x.classList.remove('on'));
-    b.classList.add('on');
-  }));
+  // 改配色 = 想自定义：自动勾选自定义预设（预设门槛曾让上传/配色静默失效）
+  ['tmPanelColor', 'tmCardColor'].forEach(id => {
+    modal.querySelector('#' + id).addEventListener('input', () => {
+      const c = modal.querySelector('.preset[data-preset="custom"]');
+      if (c && !c.classList.contains('on')) {
+        modal.querySelectorAll('.preset').forEach(x => x.classList.remove('on'));
+        c.classList.add('on');
+      }
+    });
+  });
 
   modal.addEventListener('click', (e) => {
     if (e.target === modal) { modal.remove(); return; }
@@ -661,34 +587,19 @@ function openThemeModal() {
       toast('已恢复默认呢绒主题');
       return;
     }
-    if (btn && btn.dataset.act === 'clearimg') {
-      const t2 = getTheme();
-      delete t2.panelImage; delete t2.cardImage;
-      setTheme(t2);
-      applyTheme();
-      modal.querySelector('#tmPanelImg + .upinfo').textContent = 'JPG/PNG，自动缩放';
-      modal.querySelector('#tmCardImg + .upinfo').textContent = '自动按牌比例适配';
-      toast('已清除自定义图片');
-      return;
-    }
     if (btn && btn.dataset.act === 'ok') {
       const presetEl = modal.querySelector('.preset.on');
       const t2 = getTheme();
       t2.preset = presetEl ? presetEl.dataset.preset : 'felt';
       if (t2.preset === 'custom') {
         t2.panelColor = modal.querySelector('#tmPanelColor').value;
-        t2.panelMask = +modal.querySelector('#tmMask').value / 100;
         t2.cardColor = modal.querySelector('#tmCardColor').value;
-        t2.panelFit = (modal.querySelector('.fitb.on[data-which="panel"]') || {}).dataset?.fit || 'cover';
-        t2.cardFit = (modal.querySelector('.fitb.on[data-which="card"]') || {}).dataset?.fit || 'cover';
-        if (pending.panelImage !== undefined) t2.panelImage = pending.panelImage;
-        if (pending.cardImage !== undefined) t2.cardImage = pending.cardImage;
       }
       setTheme(t2);
       applyTheme();
       modal.remove();
       Sound.land();
-      toast(t2.preset === 'glass' ? '💎 透明玻璃已启用' : t2.preset === 'custom' ? '🎨 自定义主题已应用' : '🌿 呢绒已恢复');
+      toast(t2.preset === 'glass' ? '💎 透明玻璃已启用' : t2.preset === 'custom' ? '🎨 自定义配色已应用' : '🌿 呢绒已恢复');
       return;
     }
   });

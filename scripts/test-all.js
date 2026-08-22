@@ -305,11 +305,11 @@ async function main() {
       } catch (e) { return { show: false, title: '', err: String(e) }; }
     })()`);
     const a2 = await ev(`(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return 'esc'; })()`);
-    await sleep(320);   // closePop 有 220ms 收起动画
-    const a2b = await ev(`(() => { const p = document.getElementById('fortunePop'); return { closed: !p.classList.contains('show') }; })()`);
+    await sleep(700);   // closePop 实测 ~310ms 完成（220ms 动画+类移除），留足余量防抖动误报
+    const a2b = await ev(`(() => { const p = document.getElementById('fortunePop'); const cm = document.getElementById('catModal'); const dm = document.getElementById('delCatModal'); const tm = document.getElementById('themeModal'); const hm = document.getElementById('hotkeyModal'); return { closed: !p.classList.contains('show'), cat: !!cm, catOpen: !!(cm && cm.classList.contains('open')), del: !!dm, delOpen: !!(dm && dm.classList.contains('open')), theme: !!tm, hotkey: !!hm, vis: document.visibilityState }; })()`);
     const a3 = await ev(`(() => { document.getElementById('btnFortune').click(); const t1 = document.getElementById('fortunePop').querySelector('.ftitle').textContent; document.querySelector('#fortunePop .plain').click(); document.getElementById('btnFortune').click(); const t2 = document.getElementById('fortunePop').querySelector('.ftitle').textContent; document.querySelector('#fortunePop .plain').click(); return { stable: t1 === t2, t: t1.slice(0, 12) }; })()`);
     record('T15 今日一抽（弹层/Esc 关闭/全天稳定）',
-      a1.show && a1.title.includes('今日宜开') && a2b.closed && a3.stable, JSON.stringify({ a1: a1.show, esc: a2b.closed, t: a3.t }));
+      a1.show && a1.title.includes('今日宜开') && a2b.closed && a3.stable, JSON.stringify({ a1: a1.show, esc: a2b.closed, t: a3.t, at: a2b.cat + '/' + a2b.catOpen + '/' + a2b.del + '/' + a2b.theme + '/' + a2b.hotkey, vis: a2b.vis }));
   }
 
   // T17 模式切换（先强清存档与内存局——上一轮残局会泄漏进本轮断言）
