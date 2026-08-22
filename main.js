@@ -12,7 +12,7 @@
    ============================================================ */
 'use strict';
 
-const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, shell, nativeImage } = require('electron');
+const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, shell, nativeImage, screen } = require('electron');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs');
@@ -24,16 +24,30 @@ const execAsync = promisify(exec);
 const userDataDir = app.getPath('userData');
 if (!fs.existsSync(userDataDir)) fs.mkdirSync(userDataDir, { recursive: true });
 const LOG_PATH = path.join(userDataDir, 'main.log');
-let logStream = fs.createWriteStream(LOG_PATH, { flags: 'a' });
-logStream.on('error', () => {});   // 日志盘故障不许拖垮主进程
+let logStream = null;
+let logBytes = 0;
+const LOG_MAX = 2 * 1024 * 1024;   // 超限轮转：main.log -> main.log.old（常驻应用防日志无限增长）
+function openLog() {
+  try {
+    if (fs.existsSync(LOG_PATH) && fs.statSync(LOG_PATH).size > LOG_MAX) {
+      try { fs.unlinkSync(LOG_PATH + '.old'); } catch (e) {}
+      try { fs.renameSync(LOG_PATH, LOG_PATH + '.old'); } catch (e) {}
+    }
+  } catch (e) {}
+  logStream = fs.createWriteStream(LOG_PATH, { flags: 'a' });
+  logStream.on('error', () => {});   // 日志盘故障不许拖垮主进程
+  logBytes = fs.existsSync(LOG_PATH) ? fs.statSync(LOG_PATH).size : 0;
+  process.stdout.write = logStream.write.bind(logStream);
+  process.stderr.write = logStream.write.bind(logStream);
+}
 function log(...args) {
   const line = `[${new Date().toISOString()}] ` + args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ') + '\n';
-  try { logStream.write(line); } catch (e) {}
+  try { logStream.write(line); logBytes += line.length; } catch (e) {}
+  if (logBytes > LOG_MAX) openLog();   // 运行中超限：换新文件接着写
 }
-process.stdout.write = logStream.write.bind(logStream);
-process.stderr.write = logStream.write.bind(logStream);
 process.on('uncaughtException', (e) => { log('uncaughtException:', e && e.stack || e); });
 process.on('unhandledRejection', (e) => { log('unhandledRejection:', e && e.stack || e); });
+openLog();
 
 // ---------- 路径 ----------
 const APPS_JSON = path.join(userDataDir, 'apps.json');
@@ -158,9 +172,15 @@ let hideTimer = null;
 let suspendHide = false;   // 文件选择等系统对话框期间挂起失焦自动收起（否则对话框连着面板一起被关）
 
 function createPanel() {
+  // 小屏/高缩放夹紧：1080p@150% 工作区仅 ~672 高，写死 820 会裁掉底行
+  const wa = screen.getPrimaryDisplay().workArea;
+  const W = Math.min(1280, wa.width - 16);
+  const H = Math.min(820, wa.height - 12);
   panel = new BrowserWindow({
-    width: 1280,
-    height: 820,
+    width: W,
+    height: H,
+    minWidth: 720,
+    minHeight: 480,
     show: false,
     frame: false,
     transparent: true,
@@ -215,6 +235,11 @@ function buildTrayMenu() {
   const menu = Menu.buildFromTemplate([
     { label: `展开牌堆（${hotkey}）`, click: () => togglePanel() },
     { label: '重新扫描本机应用', click: async () => { await refreshScan(); if (panel) panel.webContents.send('deck:apps-updated'); } },
+    { label: (app.getLoginItemSettings().openAtLogin ? '✓ ' : '') + '开机自启', click: () => {
+      const on = !app.getLoginItemSettings().openAtLogin;
+      try { app.setLoginItemSettings({ openAtLogin: on }); } catch (e) { log('login-item fail', e && e.message); }
+      buildTrayMenu();
+    } },
     { type: 'separator' },
     { label: '退出', click: () => { app.quit(); } },
   ]);
@@ -237,6 +262,7 @@ ipcMain.handle('deck:hide', () => { if (panel) panel.hide(); });
 ipcMain.handle('deck:suspend-hide', (_e, v) => { suspendHide = !!v; return suspendHide; });
 ipcMain.handle('deck:get-hotkey', () => hotkey);
 ipcMain.handle('deck:set-hotkey', (_e, acc) => registerHotkey(acc));
+ipcMain.handle('deck:log', (_e, line) => { log('[renderer]', String(line).slice(0, 500)); });
 ipcMain.handle('deck:open-exe-dir', (_e, exePath) => {
   if (exePath) shell.showItemInFolder(exePath);
 });
@@ -261,6 +287,16 @@ if (!gotLock) {
     createTray();
     const ok = globalShortcut.register(hotkey, togglePanel);
     log('hotkey', hotkey, 'registered:', ok);
+    if (!ok && tray) {
+      // 热键被占：托盘气泡告知（面板仍可点托盘打开，⌨ 可换键）
+      try {
+        tray.displayBalloon({
+          iconType: 'info',
+          title: '应用牌堆',
+          content: `快捷键 ${hotkey} 被其他程序占用。点托盘图标可打开面板；在面板 ⌨ 里换一组快捷键。`,
+        });
+      } catch (e) { log('balloon fail', e && e.message); }
+    }
     // 首次数据：有缓存立即用，没有就扫（不阻塞窗口创建）
     await scanIfNeeded(false);
     if (panel && !panel.isDestroyed()) panel.webContents.send('deck:apps-updated');

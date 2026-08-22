@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('deck', {
   suspendHide: (v) => ipcRenderer.invoke('deck:suspend-hide', v),
   getHotkey: () => ipcRenderer.invoke('deck:get-hotkey'),
   setHotkey: (acc) => ipcRenderer.invoke('deck:set-hotkey', acc),
+  logError: (msg) => ipcRenderer.invoke('deck:log', msg),
   openExeDir: (exePath) => ipcRenderer.invoke('deck:open-exe-dir', exePath),
   onAppsUpdated: (cb) => ipcRenderer.on('deck:apps-updated', () => cb()),
   onShown: (cb) => ipcRenderer.on('deck:shown', () => cb()),

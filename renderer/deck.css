@@ -5,10 +5,21 @@
    ============================================================ */
 :root {
   --card-bg: 22, 26, 40;
-  --accent-color: 96, 165, 250;
-  --gold: #ffe9b8;
+  --accent-color: 255, 215, 130;    /* 全局唯一强调色（默认金；玻璃主题注入粉色整体换装） */
+  --gold: rgb(var(--accent-color)); /* 兼容旧名 */
   /* 主题注入点：--panel-img/--panel-bg-color/--panel-bg-size 与 --cardback-img/--cardback-size */
 }
+
+/* 工具栏分组分隔线 + SVG 线性图标 */
+.tb-sep { width: 1px; height: 18px; background: rgba(255,255,255,.16); margin: 0 5px; flex: none; }
+svg.ic { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.tbtn .ic { width: 15px; height: 15px; vertical-align: -3px; margin-right: 3px; }
+.tbtn.icon-only .ic { margin-right: 0; vertical-align: -2px; }
+.searchbox .ic { width: 13px; height: 13px; }
+
+/* 键盘导航选牌高亮 */
+.tcard.kb-focus .lift { transform: translateY(-8px) scale(1.06); border-radius: 12px;
+  box-shadow: 0 0 0 2px rgba(var(--accent-color), .95), 0 10px 28px rgba(0,0,0,.5); }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -59,9 +70,9 @@ html, body {
   color: rgba(255,255,255,.75); transition: all .15s ease; font-family: inherit;
 }
 .tbtn:hover { background: rgba(255,255,255,.12); }
-.tbtn.gold { color: var(--gold); border-color: rgba(255,215,130,.55); background: rgba(255,215,130,.12); animation: goldBreathe 3s ease-in-out infinite; }
-.tbtn.gold:hover { background: rgba(255,215,130,.24); }
-@keyframes goldBreathe { 0%,100% { box-shadow: 0 0 6px rgba(255,200,90,.15); } 50% { box-shadow: 0 0 16px rgba(255,200,90,.35); } }
+.tbtn.gold { color: var(--gold); border-color: rgba(var(--accent-color),.55); background: rgba(var(--accent-color),.12); animation: goldBreathe 3s ease-in-out infinite; }
+.tbtn.gold:hover { background: rgba(var(--accent-color),.24); }
+@keyframes goldBreathe { 0%,100% { box-shadow: 0 0 6px rgba(var(--accent-color), .15); } 50% { box-shadow: 0 0 16px rgba(var(--accent-color), .35); } }
 .searchbox { display: none; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 16px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14); }
 .searchbox.show { display: flex; }
 .searchbox input { width: 130px; border: none; outline: none; background: transparent; color: #fff; font-size: 12px; font-family: inherit; }
@@ -97,7 +108,7 @@ html, body {
   position: absolute; bottom: 5px; left: 0; width: 100%;
   font-size: 8px; color: rgba(255,255,255,.4); text-align: center; pointer-events: none;
 }
-.tcard--custom .face.back { border-color: rgba(255, 215, 130, .55); }
+.tcard--custom .face.back { border-color: rgba(var(--accent-color), .55); }
 .custombadge {
   position: absolute; top: 5px; right: 7px; z-index: 2;
   font-size: 10px; color: var(--gold); opacity: .9;
@@ -330,23 +341,23 @@ html, body {
   background:
     repeating-linear-gradient(45deg, rgba(255,255,255,.04) 0 6px, transparent 6px 12px),
     linear-gradient(150deg, #3a2f14 0%, #241d0c 100%);
-  border: 1px solid rgba(255,215,130,.55);
+  border: 1px solid rgba(var(--accent-color),.55);
   box-shadow: 0 0 28px rgba(255,200,90,.28), 0 18px 50px rgba(0,0,0,.55);
   transform: scale(.9); transition: transform .28s cubic-bezier(.3,1.3,.4,1);
 }
 #fortunePop.open .fcard-box, #winPop.open .fcard-box { transform: scale(1); }
 .fcard-box img, .fcard-box .fph { width: 56px; height: 56px; object-fit: contain; border-radius: 10px; filter: drop-shadow(0 4px 10px rgba(0,0,0,.5)); }
-.fcard-box .fph { display: grid; place-items: center; font-size: 24px; font-weight: 700; background: rgba(255,215,130,.16); border: 1px solid rgba(255,215,130,.4); }
+.fcard-box .fph { display: grid; place-items: center; font-size: 24px; font-weight: 700; background: rgba(var(--accent-color),.16); border: 1px solid rgba(var(--accent-color),.4); }
 .fcard-box .ftitle { font-size: 21px; font-weight: 700; color: var(--gold); letter-spacing: 3px; text-align: center; }
 .fcard-box .ftext { font-size: 13.5px; color: rgba(255,255,255,.82); line-height: 1.7; text-align: center; }
 .fcard-box .fmeta { font-size: 11px; color: rgba(255,233,184,.4); }
 .fcard-box .fbtns { display: flex; gap: 10px; margin-top: 10px; }
 .fcard-box button {
   padding: 9px 18px; border-radius: 9px; cursor: pointer; font-size: 13px;
-  border: 1px solid rgba(255,215,130,.5); background: rgba(255,215,130,.14);
+  border: 1px solid rgba(var(--accent-color),.5); background: rgba(var(--accent-color),.14);
   color: var(--gold); transition: background .15s; font-family: inherit;
 }
-.fcard-box button:hover { background: rgba(255,215,130,.28); }
+.fcard-box button:hover { background: rgba(var(--accent-color),.28); }
 .fcard-box button.plain { border-color: rgba(255,255,255,.2); background: rgba(255,255,255,.08); color: rgba(255,255,255,.75); }
 
 /* 解读浮层：悬停半秒出现，牌意大字（不占小卡空间，不捕获鼠标防闪烁） */
@@ -360,7 +371,7 @@ html, body {
   background:
     repeating-linear-gradient(45deg, rgba(255,255,255,.03) 0 6px, transparent 6px 12px),
     rgba(13, 17, 30, .97);
-  border: 1px solid rgba(255, 215, 130, .4);
+  border: 1px solid rgba(var(--accent-color), .4);
   box-shadow: 0 14px 44px rgba(0, 0, 0, .6), 0 0 18px rgba(255, 200, 90, .12);
   pointer-events: none;          /* 关键：不拦截 hover，避免与卡片互闪 */
   opacity: 0;
@@ -421,15 +432,15 @@ html, body {
   font-size: 13px; color: rgba(255,255,255,.85);
 }
 .ctxmenu__item:hover { background: rgba(255,255,255,.1); }
-.ctxmenu__item.on { color: var(--gold); background: rgba(255,215,130,.08); }
+.ctxmenu__item.on { color: var(--gold); background: rgba(var(--accent-color),.08); }
 .ctxmenu__mark { font-size: 10px; color: rgba(255,255,255,.4); }
-.ctxmenu__item.on .ctxmenu__mark { color: rgba(255,215,130,.75); }
+.ctxmenu__item.on .ctxmenu__mark { color: rgba(var(--accent-color),.75); }
 .ctxmenu__sep { height: 1px; background: rgba(255,255,255,.08); margin: 4px 6px; }
 
 /* 新建分类按钮 */
-.chip--add { color: var(--gold); border-color: rgba(255,215,130,.45); border-style: dashed; }
-.chip--add:hover { background: rgba(255,215,130,.14); }
-.chip--customcat { border-color: rgba(255,215,130,.35); }
+.chip--add { color: var(--gold); border-color: rgba(var(--accent-color),.45); border-style: dashed; }
+.chip--add:hover { background: rgba(var(--accent-color),.14); }
+.chip--customcat { border-color: rgba(var(--accent-color),.35); }
 
 /* 新建/删除分类弹层 */
 .catmodal-pop {
@@ -445,7 +456,7 @@ html, body {
   background:
     repeating-linear-gradient(45deg, rgba(255,255,255,.03) 0 6px, transparent 6px 12px),
     rgba(13, 17, 30, .98);
-  border: 1px solid rgba(255, 215, 130, .4);
+  border: 1px solid rgba(var(--accent-color), .4);
   box-shadow: 0 18px 50px rgba(0,0,0,.6), 0 0 20px rgba(255,200,90,.1);
   transform: scale(.94); transition: transform .2s cubic-bezier(.3,1.3,.4,1);
 }
@@ -466,15 +477,15 @@ html, body {
   transition: all .12s ease;
 }
 .catmodal__icons .ci:hover { background: rgba(255,255,255,.12); transform: scale(1.1); }
-.catmodal__icons .ci.on { border-color: rgba(255,215,130,.8); background: rgba(255,215,130,.14); }
+.catmodal__icons .ci.on { border-color: rgba(var(--accent-color),.8); background: rgba(var(--accent-color),.14); }
 .catmodal__hint { font-size: 10.5px; color: rgba(255,255,255,.4); text-align: center; line-height: 1.6; }
 .catmodal__btns { display: flex; gap: 10px; }
 .catmodal__btns button {
   padding: 9px 22px; border-radius: 10px; cursor: pointer; font-size: 13px;
-  border: 1px solid rgba(255,215,130,.5); background: rgba(255,215,130,.14);
+  border: 1px solid rgba(var(--accent-color),.5); background: rgba(var(--accent-color),.14);
   color: var(--gold); font-family: inherit; transition: background .15s;
 }
-.catmodal__btns button:hover { background: rgba(255,215,130,.28); }
+.catmodal__btns button:hover { background: rgba(var(--accent-color),.28); }
 .catmodal__btns button.plain { border-color: rgba(255,255,255,.2); background: rgba(255,255,255,.08); color: rgba(255,255,255,.75); }
 
 /* 主题设置弹层 */
@@ -485,7 +496,7 @@ html, body {
   padding: 7px 14px; border-radius: 10px; cursor: pointer; font-size: 12px;
   background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); color: rgba(255,255,255,.8);
 }
-.thememodal .preset.on { border-color: rgba(255,215,130,.8); background: rgba(255,215,130,.14); color: var(--gold); }
+.thememodal .preset.on { border-color: rgba(var(--accent-color),.8); background: rgba(var(--accent-color),.14); color: var(--gold); }
 .thememodal input[type="color"] {
   width: 44px; height: 30px; border: none; border-radius: 8px; background: none; cursor: pointer; padding: 0;
 }

@@ -239,6 +239,28 @@ function buildDeck() {
 let filterCat = 'all';
 let searchQ = '';
 
+// ---------- 工具栏 SVG 线性图标（emoji 跨 Windows 版本渲染不一） ----------
+const IC = {
+  gamepad: '<svg class="ic" viewBox="0 0 24 24"><path d="M6 12h4M8 10v4"/><circle cx="15.5" cy="11" r=".5"/><circle cx="18" cy="13.5" r=".5"/><path d="M17.3 5H6.7a4.7 4.7 0 0 0-4.65 5.4l.9 5A2.9 2.9 0 0 0 7.8 17L9.5 15h5l1.7 2a2.9 2.9 0 0 0 4.85-1.6l.9-5A4.7 4.7 0 0 0 17.3 5z"/></svg>',
+  deck: '<svg class="ic" viewBox="0 0 24 24"><rect x="5" y="3" width="10" height="14" rx="2"/><path d="M15 6.5l3 .8a2 2 0 0 1 1.4 2.4L17.6 19"/></svg>',
+  volume: '<svg class="ic" viewBox="0 0 24 24"><path d="M11.5 5.5L7 9H4v6h3l4.5 3.5v-13z"/><path d="M15 9a4.2 4.2 0 0 1 0 6M17.8 6.5a8 8 0 0 1 0 11"/></svg>',
+  mute: '<svg class="ic" viewBox="0 0 24 24"><path d="M11.5 5.5L7 9H4v6h3l4.5 3.5v-13z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>',
+};
+
+// ---------- 拼音首字母/全拼（中文应用名兜底搜索，PowerToys 式体验） ----------
+let PY_OK = false;
+try { PY_OK = typeof pinyinPro !== 'undefined'; } catch (e) {}
+function buildPinyin() {
+  if (!PY_OK) return;
+  DATA.forEach(a => {
+    try {
+      const o = { toneType: 'none', type: 'array', nonZh: 'consecutive' };
+      a.pyFull = pinyinPro.pinyin(a.name || '', o).join('').replace(/\s+/g, '').toLowerCase();
+      a.pyInit = pinyinPro.pinyin(a.name || '', Object.assign({ pattern: 'first' }, o)).join('').replace(/\s+/g, '').toLowerCase();
+    } catch (e) { /* 单个名称转换失败不影响其余 */ }
+  });
+}
+
 function tcardHTML(a) {
   const c = catOf(a);
   const custom = !!getCustomCats()[a.name];
@@ -348,7 +370,8 @@ function showCatMenu(a, x, y) {
   if (my + H > window.innerHeight - 12) my = window.innerHeight - H - 12;
   ctxMenu.style.left = mx + 'px';
   ctxMenu.style.top = my + 'px';
-  requestAnimationFrame(() => ctxMenu.classList.add('open'));
+  const menuEl = ctxMenu;   // 本地捕获：菜单秒关后模块变量会被置 null，rAF 竞态曾刷 Uncaught TypeError
+  requestAnimationFrame(() => menuEl.classList.add('open'));
 
   ctxMenu.addEventListener('click', (e) => {
     const it = e.target.closest('.ctxmenu__item');
@@ -500,7 +523,7 @@ function applyTheme() {
     // 深色底漆（bg-color 垫在 background-image 渐变之下）：白/浅色桌面也保证白字可读——
     // 透明染色层只对深壁纸有效，纯透曾导致浅色桌面下界面看不清
     r.setProperty('--panel-bg-color', 'rgba(7, 13, 17, 0.55)');
-    r.setProperty('--panel-img', 'linear-gradient(160deg, rgba(10, 186, 181, 0.26) 0%, rgba(255, 123, 172, 0.16) 100%)');
+    r.setProperty('--panel-img', 'linear-gradient(160deg, rgba(10, 186, 181, 0.34) 0%, rgba(255, 123, 172, 0.22) 100%)');
     r.setProperty('--panel-border', 'rgba(255, 255, 255, 0.45)');
     r.setProperty('--panel-backdrop', 'blur(18px) saturate(170%)');
     r.setProperty('--panel-shadow', 'inset 0 1px 0 rgba(255, 255, 255, 0.30), 0 24px 70px rgba(0, 0, 0, 0.45)');
@@ -685,7 +708,8 @@ function renderTarot(deal) {
   if (filterCat !== 'all') list = list.filter(a => catOf(a).id === filterCat);
   if (searchQ) {
     const q = searchQ.toLowerCase();
-    list = list.filter(a => ((a.name || '') + ' ' + (a.pub || '')).toLowerCase().includes(q));
+    list = list.filter(a => (((a.name || '') + ' ' + (a.pub || '')).toLowerCase().includes(q)) ||
+      (a.pyInit && a.pyInit.includes(q)) || (a.pyFull && a.pyFull.includes(q)));
   }
   list.sort((x, y) => (y.count - x.count) || (y.last - x.last) ||
     (x.name || '').localeCompare(y.name || '', 'zh'));
@@ -699,6 +723,7 @@ function renderTarot(deal) {
     const inner = card.querySelector('.inner');
     const a = DATA.find(x => x.name === card.dataset.name);
     card.addEventListener('mouseenter', () => {
+      kbClear();
       if (!card.dataset.dragging) inner.classList.add('flipped');
       Sound.flip();
       // 悬停半秒 → 解读浮层（防扫过满屏弹）
@@ -752,6 +777,7 @@ function renderTarot(deal) {
     }
   });
   updateChips();
+  kbIdx = -1;   // 网格重建，键盘选牌作废
   const used = DATA.filter(x => x.count > 0).length;
   $('subtitle').innerHTML =
     `本机 <b>${DATA.length}</b> 款程序入阵 · 已启用 <b>${used}</b> 款 · 常用自动浮前 · <b>零输入</b> — 翻牌即达`;
@@ -1381,7 +1407,8 @@ function setMode(m) {
   $('tarot').classList.toggle('hidden', m !== 'tarot');
   $('fcboard').classList.toggle('hidden', m !== 'game');
   $('gameBtns').style.display = m === 'game' ? 'flex' : 'none';
-  $('btnMode').textContent = m === 'game' ? '🃏 塔罗牌阵' : '🎮 游戏模式';
+  $('btnMode').innerHTML = (m === 'game' ? IC.deck : IC.gamepad) +
+    '<span>' + (m === 'game' ? '塔罗牌阵' : '游戏模式') + '</span>';
   $('modeTag').textContent = m === 'game' ? '· 空当接龙 · 纯游戏' : '· 塔罗牌阵';
   $('hint').textContent = m === 'game'
     ? '点牌选中 · 再点目标移动 · 红黑交替降序 · 回收位 A→K（游戏模式不启动应用）'
@@ -1455,7 +1482,8 @@ function renderSearch(q) {
   const ql = q.toLowerCase();
   // 名称优先：先只搜名称（避免 "git" 因 Logi"tech" 捞回发行商误匹配）；
   // 名称无结果才兜底搜发行商（结果标注来源）
-  let byName = DATA.filter(a => (a.name || '').toLowerCase().includes(ql));
+  let byName = DATA.filter(a => (a.name || '').toLowerCase().includes(ql) ||
+    (a.pyInit && a.pyInit.includes(ql)) || (a.pyFull && a.pyFull.includes(ql)));
   let byPub = [];
   if (!byName.length) {
     byPub = DATA.filter(a => (a.pub || '').toLowerCase().includes(ql));
@@ -1487,10 +1515,63 @@ $('searchInput').addEventListener('input', (e) => renderSearch(e.target.value));
 // ---------- 其他 ----------
 $('btnTheme').addEventListener('click', openThemeModal);
 $('btnHotkey').addEventListener('click', openHotkeyModal);
-$('btnSound').addEventListener('click', (e) => { e.target.textContent = Sound.toggle() ? '🔊' : '🔇'; });
+$('btnSound').addEventListener('click', (e) => { e.currentTarget.innerHTML = Sound.toggle() ? IC.volume : IC.mute; });
 $('btnClose').addEventListener('click', () => window.deck.hide());
 
+// ---------- 全键盘导航（塔罗模式）：方向键选牌 · Enter 启动 · 鼠标移入即让位 ----------
+let kbIdx = -1;
+function kbCards() { return [...$('grid').querySelectorAll('.tcard')]; }
+function kbClear() {
+  if (kbIdx < 0) return;
+  const el = document.querySelector('.tcard.kb-focus');
+  if (el) el.classList.remove('kb-focus');
+  kbIdx = -1;
+}
+function kbPaint() {
+  const cards = kbCards();
+  if (kbIdx < 0 || !cards.length) return;
+  cards.forEach(c => c.classList.remove('kb-focus'));
+  if (cards[kbIdx]) {
+    cards[kbIdx].classList.add('kb-focus');
+    cards[kbIdx].scrollIntoView({ block: 'nearest' });
+  }
+}
+function kbMove(dx, dy) {
+  const cards = kbCards();
+  if (!cards.length) return;
+  if (kbIdx < 0 || !cards[kbIdx]) { kbIdx = 0; kbPaint(); return; }
+  // 按 offsetTop 分行（flex wrap 同行 offsetTop 相等）
+  const rows = [];
+  let lastTop = null;
+  cards.forEach(c => { if (c.offsetTop !== lastTop) { rows.push([]); lastTop = c.offsetTop; } rows[rows.length - 1].push(c); });
+  let r = 0, col = 0;
+  for (let ri = 0; ri < rows.length; ri++) {
+    const ci = rows[ri].indexOf(cards[kbIdx]);
+    if (ci >= 0) { r = ri; col = ci; break; }
+  }
+  r = Math.max(0, Math.min(rows.length - 1, r + dy));
+  col = Math.max(0, Math.min(rows[r].length - 1, col + dx));
+  kbIdx = cards.indexOf(rows[r][col]);
+  kbPaint();
+}
+
 document.addEventListener('keydown', (e) => {
+  // 全键盘导航（塔罗模式）：方向键选牌 · Enter 启动；搜索框聚焦/弹层打开时让位
+  if (mode === 'tarot' && document.activeElement !== $('searchInput') &&
+      !$('searchResult').classList.contains('show') && !document.querySelector('.catmodal-pop.open')) {
+    const kk = e.key;
+    if (kk === 'ArrowRight' || kk === 'ArrowLeft' || kk === 'ArrowDown' || kk === 'ArrowUp') {
+      e.preventDefault();
+      hideReading();
+      kbMove(kk === 'ArrowRight' ? 1 : kk === 'ArrowLeft' ? -1 : 0, kk === 'ArrowDown' ? 1 : kk === 'ArrowUp' ? -1 : 0);
+      return;
+    }
+    if (kk === 'Enter' && kbIdx >= 0) {
+      const el = kbCards()[kbIdx];
+      if (el) { e.preventDefault(); el.click(); }
+      return;
+    }
+  }
   if (e.key === 'Escape') {
     // 关闭动画中的模态（已无 open 类但元素未及移除）不拦截 Esc
     const catM = $('catModal');
@@ -1555,12 +1636,22 @@ function layoutAll() {
   if (mode === 'game' && game) positionGame(false);
   fitTarotCards();
 }
-window.addEventListener('resize', layoutAll);
+let resizeTimer = null;
+window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(layoutAll, 100); });
+
+// ---------- 渲染层错误上报（进 main.log，报障时日志即证据链） ----------
+window.addEventListener('error', (e) => {
+  try { window.deck.logError(`error: ${e.message} @ ${(e.filename || '').split('/').pop()}:${e.lineno}`); } catch (err) {}
+});
+window.addEventListener('unhandledrejection', (e) => {
+  try { window.deck.logError('unhandledrejection: ' + ((e.reason && (e.reason.stack || e.reason.message)) || String(e.reason)).slice(0, 300)); } catch (err) {}
+});
 
 // ---------- init ----------
 async function loadApps() {
   const all = await window.deck.getApps();
   DATA = rawApps(all);
+  buildPinyin();
   buildDeck();
   if (mode === 'tarot') renderTarot(true);
 }

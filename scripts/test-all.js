@@ -25,7 +25,7 @@ function getJson(url) {
 }
 
 async function main() {
-  const pages = await getJson('http://127.0.0.1:9222/json');
+  const pages = await getJson(`http://127.0.0.1:${process.argv[2] || '9222'}/json`);   // 端口可参数化：与其他 Electron 应用（如 lumina）抢 9222 时换端口跑
   const page = pages.find(p => p.type === 'page');
   if (!page) { console.error('no page target'); process.exit(1); }
   const ws = new WebSocket(page.webSocketDebuggerUrl);
@@ -304,12 +304,13 @@ async function main() {
         return { show: p.classList.contains('show'), title: t ? t.textContent : '' };
       } catch (e) { return { show: false, title: '', err: String(e) }; }
     })()`);
-    const a2 = await ev(`(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return 'esc'; })()`);
-    await sleep(700);   // closePop 实测 ~310ms 完成（220ms 动画+类移除），留足余量防抖动误报
+    const a2 = await ev(`(async () => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); const p = document.getElementById('fortunePop'); const marks = []; for (let k = 0; k < 8; k++) { await new Promise(r => setTimeout(r, 100)); marks.push(p.classList.contains('show') ? 1 : 0); } return marks; })()`);
+    await sleep(200);   // closePop 实测 ~310ms 完成；marks 已含 800ms 观察窗
     const a2b = await ev(`(() => { const p = document.getElementById('fortunePop'); const cm = document.getElementById('catModal'); const dm = document.getElementById('delCatModal'); const tm = document.getElementById('themeModal'); const hm = document.getElementById('hotkeyModal'); return { closed: !p.classList.contains('show'), cat: !!cm, catOpen: !!(cm && cm.classList.contains('open')), del: !!dm, delOpen: !!(dm && dm.classList.contains('open')), theme: !!tm, hotkey: !!hm, vis: document.visibilityState }; })()`);
     const a3 = await ev(`(() => { document.getElementById('btnFortune').click(); const t1 = document.getElementById('fortunePop').querySelector('.ftitle').textContent; document.querySelector('#fortunePop .plain').click(); document.getElementById('btnFortune').click(); const t2 = document.getElementById('fortunePop').querySelector('.ftitle').textContent; document.querySelector('#fortunePop .plain').click(); return { stable: t1 === t2, t: t1.slice(0, 12) }; })()`);
     record('T15 今日一抽（弹层/Esc 关闭/全天稳定）',
-      a1.show && a1.title.includes('今日宜开') && a2b.closed && a3.stable, JSON.stringify({ a1: a1.show, esc: a2b.closed, t: a3.t, at: a2b.cat + '/' + a2b.catOpen + '/' + a2b.del + '/' + a2b.theme + '/' + a2b.hotkey, vis: a2b.vis }));
+      a1.show && a1.title.includes('今日宜开') && a2b.closed && a3.stable,
+      JSON.stringify({ a1: a1.show, esc: a2b.closed, marks: a2, t: a3.t, at: a2b.cat + '/' + a2b.catOpen + '/' + a2b.del + '/' + a2b.theme + '/' + a2b.hotkey, vis: a2b.vis }));
   }
 
   // T17 模式切换（先强清存档与内存局——上一轮残局会泄漏进本轮断言）
@@ -369,25 +370,28 @@ async function main() {
       r.stackA_on_2 === true && r.stack2_on_A === false && r.same_color === false && r.seq === true && r.seqBad === false && r.maxMove === true, JSON.stringify(r));
   }
 
-  // T20 合法移动 列→列（基线步数从当前值算，兼容恢复局）
+  // T20 合法移动 列→列（点击路径；随机局可能天然无此手——换局重试至多 6 次）
   {
     const r = await ev(`(() => {
-      for (let i = 0; i < 8; i++) {
-        const col = game.cols[i];
-        if (!col.length) continue;
-        const top = col[col.length - 1];
-        for (let j = 0; j < 8; j++) {
-          if (j === i) continue;
-          const dst = game.cols[j];
-          if (dst.length && canStack(top, dst[dst.length - 1])) {
-            const before = game.moveCount;
-            game.selected = { zone: 'col', i, idx: col.length - 1 };
-            const ok = tryMoveTo({ zone: 'col', i: j });
-            return { ok, moved: ok && game.cols[j][game.cols[j].length - 1] === top, delta: game.moveCount - before };
+      for (let attempt = 0; attempt < 6; attempt++) {
+        for (let i = 0; i < 8; i++) {
+          const col = game.cols[i];
+          if (!col.length) continue;
+          const top = col[col.length - 1];
+          for (let j = 0; j < 8; j++) {
+            if (j === i) continue;
+            const dst = game.cols[j];
+            if (dst.length && canStack(top, dst[dst.length - 1])) {
+              const before = game.moveCount;
+              game.selected = { zone: 'col', i, idx: col.length - 1 };
+              const ok = tryMoveTo({ zone: 'col', i: j });
+              return { ok, moved: ok && game.cols[j][game.cols[j].length - 1] === top, delta: game.moveCount - before };
+            }
           }
         }
+        newGame(randomDealNo());   // 本局无列→列合法手：换一局再找
       }
-      return { ok: false, note: 'no legal col move this deal' };
+      return { ok: false, note: 'no legal col move in 6 deals' };
     })()`);
     record('T20 合法移动 列→列（点击路径）', r.ok === true && r.moved === true && r.delta === 1, JSON.stringify(r));
   }
@@ -731,6 +735,66 @@ async function main() {
 
   // 回塔罗（后续断言需要）
   await ev(`if (mode !== 'tarot') document.getElementById('btnMode').click()`);
+
+  // T36 全键盘导航（真实 keydown：方向键选牌换位 + Enter 经 stub 启动）
+  {
+    await ev(`renderTarot(false)`);
+    const mv = await ev(`(() => {
+      const grid = document.getElementById('grid');
+      if (!grid.querySelector('.tcard')) return { err: 'no-cards' };
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      const e1 = grid.querySelector('.tcard.kb-focus');
+      const f1 = e1 ? e1.dataset.name : null;
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+      const e2 = grid.querySelector('.tcard.kb-focus');
+      return { f1, f2: e2 ? e2.dataset.name : null, moved: !!(f1 && e2 && f1 !== e2) };
+    })()`);
+    const enter = await ev(`(async () => {
+      // 桩打在 window.doLaunch（普通全局函数可覆写）；contextBridge 的 window.deck 不可 monkey-patch（静默无效）
+      const orig = window.doLaunch; let launched = null;
+      window.doLaunch = (a) => { launched = a && a.name; };
+      try {
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        await new Promise(r => setTimeout(r, 150));
+      } finally { window.doLaunch = orig; }
+      return { launched };
+    })()`);
+    record('T36 全键盘导航（方向键+Enter 真实 keydown）',
+      mv.moved === true && !!enter.launched,
+      JSON.stringify({ f1: mv.f1, f2: mv.f2, launched: enter.launched }));
+    await ev(`(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })); const el = document.querySelector('.tcard.kb-focus'); if (el) el.classList.remove('kb-focus'); return 1; })()`);
+  }
+
+  // T37 拼音首字母搜索（真实 input 事件；无中文应用名时跳过）
+  {
+    const r = await ev(`(() => {
+      const zh = DATA.find(a => /[\u4e00-\u9fa5]/.test(a.name || '') && a.pyInit);
+      if (!zh) return { skip: true };
+      const q = zh.pyInit.slice(0, 2);
+      const inp = document.getElementById('searchInput');
+      inp.value = q;
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      const hit = document.getElementById('searchResult').innerHTML.includes(zh.name);
+      inp.value = '';
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      return { skip: false, q, name: zh.name, hit };
+    })()`);
+    record('T37 拼音首字母搜索（真实 input）', r.skip ? true : r.hit === true, JSON.stringify(r));
+  }
+
+  // T38 渲染层错误上报（真实 throw → window error → deck:log → main.log）
+  // 全文件搜唯一时间戳标记：字节偏移会撞上日志轮转失效（曾误报）
+  {
+    const LOG = path.join(process.env.APPDATA, '应用牌堆 Launcher Deck', 'main.log');
+    const marker = 'T38-' + Date.now();
+    await ev(`setTimeout(() => { throw new Error('${marker}'); }, 10)`);
+    let found = false;
+    for (let k = 0; k < 12 && !found; k++) {
+      await sleep(300);
+      try { found = fs.readFileSync(LOG, 'utf8').includes(marker); } catch (e) {}
+    }
+    record('T38 渲染错误上报进主日志', found, JSON.stringify({ found }));
+  }
 
   // 汇总
   const fail = results.filter(r => !r.pass);

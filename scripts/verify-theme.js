@@ -11,7 +11,7 @@ function getJson(url) {
   });
 }
 async function main() {
-  const pages = await getJson('http://127.0.0.1:9222/json');
+  const pages = await getJson(`http://127.0.0.1:${process.argv[2] || '9222'}/json`);
   const page = pages.find(p => p.type === 'page');
   const ws = new WebSocket(page.webSocketDebuggerUrl);
   let id = 0;
