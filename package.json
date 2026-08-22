@@ -5,9 +5,37 @@
   "description": "托盘常驻 + 全局热键的本机应用塔罗牌堆启动器",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder --win nsis"
   },
   "devDependencies": {
-    "electron": "^37.0.0"
+    "electron": "^37.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "com.dgr1771.launcherdeck",
+    "productName": "应用牌堆 Launcher Deck",
+    "directories": { "output": "release" },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**",
+      "assets/icon.ico",
+      "assets/tray.png",
+      "scripts/scan.ps1"
+    ],
+    "asarUnpack": [
+      "scripts/scan.ps1",
+      "assets/**"
+    ],
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [{ "target": "nsis", "arch": ["x64"] }]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "shortcutName": "应用牌堆 Launcher Deck"
+    }
   }
 }

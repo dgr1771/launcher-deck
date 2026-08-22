@@ -39,8 +39,8 @@ process.on('unhandledRejection', (e) => { log('unhandledRejection:', e && e.stac
 const APPS_JSON = path.join(userDataDir, 'apps.json');
 const USAGE_JSON = path.join(userDataDir, 'usage.json');
 const SETTINGS_JSON = path.join(userDataDir, 'settings.json');
-const SCAN_PS1 = path.join(__dirname, 'scripts', 'scan.ps1');
-const TRAY_PNG = path.join(__dirname, 'assets', 'tray.png');
+const SCAN_PS1 = path.join(__dirname, 'scripts', 'scan.ps1').replace(/\bapp\.asar\b/, 'app.asar.unpacked');
+const TRAY_PNG = path.join(__dirname, 'assets', 'tray.png').replace(/\bapp\.asar\b/, 'app.asar.unpacked');
 
 const SCAN_TTL_MS = 24 * 60 * 60 * 1000;   // 扫描缓存一天
 
@@ -242,16 +242,30 @@ ipcMain.handle('deck:open-exe-dir', (_e, exePath) => {
 });
 
 // ---------- 生命周期 ----------
-app.whenReady().then(async () => {
-  log('=== launcher-deck start ===');
-  createPanel();
-  createTray();
-  const ok = globalShortcut.register(hotkey, togglePanel);
-  log('hotkey', hotkey, 'registered:', ok);
-  // 首次数据：有缓存立即用，没有就扫（不阻塞窗口创建）
-  await scanIfNeeded(false);
-  if (panel && !panel.isDestroyed()) panel.webContents.send('deck:apps-updated');
-});
+// 单实例锁：托盘常驻应用，二次启动（装完自动拉起/开始菜单误点两下）只唤起已有实例
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  log('another instance running, quit');
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (panel && !panel.isDestroyed()) {
+      panel.show();
+      panel.focus();
+      if (panel.webContents) panel.webContents.send('deck:shown');
+    }
+  });
+  app.whenReady().then(async () => {
+    log('=== launcher-deck start ===');
+    createPanel();
+    createTray();
+    const ok = globalShortcut.register(hotkey, togglePanel);
+    log('hotkey', hotkey, 'registered:', ok);
+    // 首次数据：有缓存立即用，没有就扫（不阻塞窗口创建）
+    await scanIfNeeded(false);
+    if (panel && !panel.isDestroyed()) panel.webContents.send('deck:apps-updated');
+  });
+}
 
 app.on('will-quit', () => globalShortcut.unregisterAll());
 app.on('window-all-closed', (e) => {
