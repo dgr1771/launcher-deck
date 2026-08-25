@@ -304,7 +304,22 @@ async function main() {
         return { show: p.classList.contains('show'), title: t ? t.textContent : '' };
       } catch (e) { return { show: false, title: '', err: String(e) }; }
     })()`);
-    const a2 = await ev(`(async () => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); const p = document.getElementById('fortunePop'); const marks = []; for (let k = 0; k < 8; k++) { await new Promise(r => setTimeout(r, 100)); marks.push(p.classList.contains('show') ? 1 : 0); } return marks; })()`);
+    const a2 = await ev(`(async () => {
+      window.__escSeen = 0;
+      const probe = (e) => { if (e.key === 'Escape') window.__escSeen++; };
+      document.addEventListener('keydown', probe, true);   // 捕获相位：区分事件未达 vs 链路中断
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      const p = document.getElementById('fortunePop');
+      const marks = [];
+      for (let k = 0; k < 8; k++) { await new Promise(r => setTimeout(r, 100)); marks.push(p.classList.contains('show') ? 1 : 0); }
+      document.removeEventListener('keydown', probe, true);
+      const seen = window.__escSeen;
+      if (!p.classList.contains('show')) return { marks, escSeen: seen };
+      // 二次机会：再补一次 Esc（偶发一次不触发的场景取证）
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await new Promise(r => setTimeout(r, 400));
+      return { marks, escSeen: seen, closedAfterRetry: !p.classList.contains('show') };
+    })()`);
     await sleep(200);   // closePop 实测 ~310ms 完成；marks 已含 800ms 观察窗
     const a2b = await ev(`(() => { const p = document.getElementById('fortunePop'); const cm = document.getElementById('catModal'); const dm = document.getElementById('delCatModal'); const tm = document.getElementById('themeModal'); const hm = document.getElementById('hotkeyModal'); return { closed: !p.classList.contains('show'), cat: !!cm, catOpen: !!(cm && cm.classList.contains('open')), del: !!dm, delOpen: !!(dm && dm.classList.contains('open')), theme: !!tm, hotkey: !!hm, vis: document.visibilityState }; })()`);
     const a3 = await ev(`(() => { document.getElementById('btnFortune').click(); const t1 = document.getElementById('fortunePop').querySelector('.ftitle').textContent; document.querySelector('#fortunePop .plain').click(); document.getElementById('btnFortune').click(); const t2 = document.getElementById('fortunePop').querySelector('.ftitle').textContent; document.querySelector('#fortunePop .plain').click(); return { stable: t1 === t2, t: t1.slice(0, 12) }; })()`);

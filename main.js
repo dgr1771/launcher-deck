@@ -13,7 +13,7 @@
 'use strict';
 
 const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, shell, nativeImage, screen } = require('electron');
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs');
 const path = require('path');
@@ -143,21 +143,46 @@ function recordUsage(name) {
   try { fs.writeFileSync(USAGE_JSON, JSON.stringify(usage, null, 2)); } catch (e) { log('usage write fail', e); }
 }
 
+// exe 直拉：跳过 cmd.exe 一跳（省一次进程创建），工作目录设为 exe 所在目录（cmd start 的等效行为）；
+// 直拉失败（ENOENT 等）自动回退 start 兜底
+function launchExeFast(exePath) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (via) => { if (!done) { done = true; resolve(via); } };
+    const fallback = () => {
+      execAsync(`start "" "${exePath}"`, { shell: 'cmd.exe', windowsHide: true, timeout: 10 * 1000 })
+        .then(() => finish('start-fallback')).catch(() => finish('fail'));
+    };
+    try {
+      const child = spawn(exePath, [], { detached: true, stdio: 'ignore', cwd: path.dirname(exePath) });
+      child.on('error', fallback);
+      finish('direct');
+    } catch (e) { fallback(); }
+  });
+}
+
 async function launchApp(appInfo) {
+  const t0 = Date.now();
   try {
-    recordUsage(appInfo.name);
+    let via;
     if (appInfo.src === 'appx' && appInfo.uwp) {
       // UWP: shell:AppsFolder\<FamilyName>!<AppId>
       await execAsync(`explorer.exe "shell:AppsFolder\\${appInfo.uwp}"`, { windowsHide: true, timeout: 10 * 1000 });
-      log('launched uwp:', appInfo.name);
-    } else if (appInfo.exe && /\.(exe|lnk)$/i.test(appInfo.exe)) {
-      // 只允许可执行目标——图标(.ico/.dll)等误传直接拒绝而不是弹"选择打开方式"
+      via = 'uwp';
+    } else if (appInfo.exe && /\.lnk$/i.test(appInfo.exe)) {
+      // 快捷方式仍走 start（ShellExecute 解析 .lnk）
       await execAsync(`start "" "${appInfo.exe}"`, { shell: 'cmd.exe', windowsHide: true, timeout: 10 * 1000 });
-      log('launched exe:', appInfo.name, appInfo.exe);
+      via = 'lnk';
+    } else if (appInfo.exe && /\.exe$/i.test(appInfo.exe)) {
+      // 只允许可执行目标——图标(.ico/.dll)等误传直接拒绝而不是弹"选择打开方式"
+      via = await launchExeFast(appInfo.exe);
     } else {
       log('no valid launch target:', appInfo.name, appInfo.exe);
       return { ok: false, err: '未能定位启动目标（该程序可能需要从开始菜单打开）' };
     }
+    // 频率记录挪出关键路径：先拉起，后记账（同步读写 usage.json 曾挡在 spawn 之前）
+    setTimeout(() => { try { recordUsage(appInfo.name); } catch (e) {} }, 0);
+    log('launched:', appInfo.name, `via=${via}`, `${Date.now() - t0}ms`);
     return { ok: true };
   } catch (e) {
     log('launch fail:', appInfo.name, e && e.message);
@@ -249,10 +274,10 @@ function buildTrayMenu() {
 
 // ---------- IPC ----------
 ipcMain.handle('deck:get-apps', () => getAppsInternal());
-ipcMain.handle('deck:launch', async (_e, appInfo) => {
-  const r = await launchApp(appInfo);
+ipcMain.handle('deck:launch', (_e, appInfo) => {
+  // 点按即收牌：感知卡顿的大头是"等启动调用完成才收起"（杀软首扫可达数百 ms）——先收，启动转后台
   if (panel && !panel.isDestroyed()) panel.hide();
-  return r;
+  return launchApp(appInfo);
 });
 ipcMain.handle('deck:refresh', async () => {
   await refreshScan();

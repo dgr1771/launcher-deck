@@ -1,7 +1,7 @@
 {
   "name": "launcher-deck",
   "productName": "应用牌堆 Launcher Deck",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "托盘常驻 + 全局热键的本机应用塔罗牌堆启动器",
   "main": "main.js",
   "scripts": {
