@@ -124,6 +124,16 @@ html, body {
 }
 #grid::-webkit-scrollbar { width: 8px; }
 #grid::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); border-radius: 4px; }
+
+/* 常用置顶区：手动 pin + 热度补位；固定最大牌面，不随总量缩水 */
+#topRow { display: flex; flex-wrap: wrap; gap: 10px 13px; justify-content: center; align-content: flex-start;
+  padding: 2px 6px 6px; }
+#topRow::before { content: '◆ 常用与置顶'; width: 100%; text-align: center;
+  font-size: 10.5px; letter-spacing: 3px; color: rgba(255,255,255,.42); padding-bottom: 2px; }
+#topRow .tcard { width: 102px; height: 148px; }
+.pinbadge { position: absolute; top: 5px; left: 7px; z-index: 2; font-size: 10px;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,.8)); pointer-events: none; }
+.tcard--pinned .face.back { border-color: rgba(255, 215, 130, .7); }
 .empty-hint { width: 100%; text-align: center; color: rgba(255,255,255,.4); padding: 50px 0; font-size: 13px; }
 
 /* 塔罗卡 — 结构与看板 wp-fcard 一致（牌背全可见，无遮挡） */

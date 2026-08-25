@@ -261,15 +261,33 @@ function buildPinyin() {
   });
 }
 
-function tcardHTML(a) {
+// ---------- 置顶与热度（常用置顶区：手动 pin + 频率×时间衰减自动补位） ----------
+const PIN_KEY = 'ld_pinned';
+function getPinned() { try { return JSON.parse(localStorage.getItem(PIN_KEY) || '[]'); } catch (e) { return []; } }
+function isPinned(name) { return getPinned().includes(name); }
+function togglePin(name) {
+  const cur = getPinned();
+  const i = cur.indexOf(name);
+  if (i >= 0) cur.splice(i, 1); else cur.push(name);
+  try { localStorage.setItem(PIN_KEY, JSON.stringify(cur)); } catch (e) {}
+}
+// 热度分：次数 × 时间衰减（7 天内 1.0，其后每周 ×0.75，下限 0.1）——近期用得多排更前，冷宫应用自然下沉
+function appScore(a) {
+  const days = (Date.now() - (a.last || 0)) / 86400000;
+  const decay = Math.max(0.1, Math.pow(0.75, Math.max(0, days - 7) / 7));
+  return (a.count || 0) * decay;
+}
+
+function tcardHTML(a, isTop) {
   const c = catOf(a);
   const custom = !!getCustomCats()[a.name];
   const meta = [a.pub, a.ver && ('v' + a.ver), a.date].filter(Boolean).join(' · ');
   const badge = a.count > 0 ? `<div class="usebadge">★${a.count}</div>` : '';
   const customMark = custom ? `<div class="custombadge" title="自定义归类（拖到其它花色可改，拖到未名之牌恢复自动）">◈</div>` : '';
+  const pinned = isPinned(a.name);
   return `
-  <div class="tcard${custom ? ' tcard--custom' : ''}" draggable="true" data-name="${escapeHTML(a.name)}">
-    ${badge}${customMark}
+  <div class="tcard${custom ? ' tcard--custom' : ''}${isTop ? ' tcard--top' : ''}${pinned ? ' tcard--pinned' : ''}" draggable="true" data-name="${escapeHTML(a.name)}">
+    ${badge}${customMark}${pinned ? '<div class="pinbadge" title="已置顶（右键可取消）">📌</div>' : ''}
     <div class="lift">
       <div class="inner">
         <div class="face back" data-suit="${c.suit}">
@@ -354,6 +372,8 @@ function showCatMenu(a, x, y) {
   ];
   ctxMenu.innerHTML = `
     <div class="ctxmenu__title">「${escapeHTML(a.name)}」归类到</div>
+    <div class="ctxmenu__item" data-act="pin">${isPinned(a.name) ? '📌 取消置顶（回牌阵）' : '📌 置顶到常用区'}</div>
+    <div class="ctxmenu__sep"></div>
     ${items.map(it => `
       <div class="ctxmenu__item${it.id === cur ? ' on' : ''}" data-cat="${it.id}">
         <span>${it.icon} ${it.name}</span>
@@ -376,6 +396,16 @@ function showCatMenu(a, x, y) {
   ctxMenu.addEventListener('click', (e) => {
     const it = e.target.closest('.ctxmenu__item');
     if (!it) return;
+    if (it.dataset.act === 'pin') {
+      togglePin(a.name);
+      Sound.land();
+      toast(isPinned(a.name)
+        ? `「${escapeHTML(a.name)}」已置顶到常用区`
+        : `「${escapeHTML(a.name)}」已取消置顶`);
+      closeCatMenu();
+      renderTarot(false);
+      return;
+    }
     if (it.dataset.act === 'launch') {
       closeCatMenu();
       Sound.land();
@@ -711,15 +741,39 @@ function renderTarot(deal) {
     list = list.filter(a => (((a.name || '') + ' ' + (a.pub || '')).toLowerCase().includes(q)) ||
       (a.pyInit && a.pyInit.includes(q)) || (a.pyFull && a.pyFull.includes(q)));
   }
-  list.sort((x, y) => (y.count - x.count) || (y.last - x.last) ||
-    (x.name || '').localeCompare(y.name || '', 'zh'));
+  // 评分排序：置顶绝对优先 → 热度（次数×时间衰减）→ 名称
+  list.forEach(a => { a._score = (isPinned(a.name) ? 1e9 : 0) + appScore(a); });
+  list.sort((x, y) => (y._score - x._score) || (x.name || '').localeCompare(y.name || '', 'zh'));
+
+  // 常用置顶区：手动 pin 全上（无视花色过滤——用户意图优先）；热度自动补位只在"全部"视图
+  // （过滤小花色时自动补位会把整类吸进顶排、网格清空——浏览类别要的是聚焦视图）
+  const TOP_N = 10;
+  const topRow = $('topRow');
+  let rest = list;
+  if (!searchQ) {
+    const inList = new Set(list.map(a => a.name));
+    const pinsShown = DATA.filter(a => isPinned(a.name));
+    const pinsIn = pinsShown.filter(a => inList.has(a.name));
+    const pinsOut = pinsShown.filter(a => !inList.has(a.name));
+    const auto = (filterCat === 'all')
+      ? list.filter(a => !isPinned(a.name)).slice(0, Math.max(0, TOP_N - pinsShown.length))
+      : [];
+    const topList = [...pinsOut, ...pinsIn, ...auto];
+    const topNames = new Set(topList.map(a => a.name));
+    rest = list.filter(a => !topNames.has(a.name));
+    topRow.style.display = topList.length ? '' : 'none';
+    topRow.innerHTML = topList.map(a => tcardHTML(a, true)).join('');
+  } else {
+    topRow.style.display = 'none';
+  }
 
   const grid = $('grid');
-  grid.innerHTML = list.length
-    ? list.map(a => tcardHTML(a)).join('')
-    : '<div class="empty-hint">这一花色下没有牌 · 换个花色或清空搜索</div>';
+  grid.innerHTML = rest.length
+    ? rest.map(a => tcardHTML(a)).join('')
+    : (list.length ? '<div class="empty-hint">这一花色的牌都在上方常用区 · 右键取消置顶可回到牌阵</div>'
+                   : '<div class="empty-hint">这一花色下没有牌 · 换个花色或清空搜索</div>');
 
-  grid.querySelectorAll('.tcard').forEach((card, i) => {
+  document.querySelectorAll('#tarot .tcard').forEach((card, i) => {
     const inner = card.querySelector('.inner');
     const a = DATA.find(x => x.name === card.dataset.name);
     card.addEventListener('mouseenter', () => {
@@ -1520,7 +1574,7 @@ $('btnClose').addEventListener('click', () => window.deck.hide());
 
 // ---------- 全键盘导航（塔罗模式）：方向键选牌 · Enter 启动 · 鼠标移入即让位 ----------
 let kbIdx = -1;
-function kbCards() { return [...$('grid').querySelectorAll('.tcard')]; }
+function kbCards() { return [...document.querySelectorAll('#tarot .tcard')]; }   // 含常用置顶区
 function kbClear() {
   if (kbIdx < 0) return;
   const el = document.querySelector('.tcard.kb-focus');

@@ -82,11 +82,11 @@ async function main() {
   // T2 塔罗渲染（动态数量）
   {
     const r = await ev(`(() => ({
-      cards: document.querySelectorAll('#grid .tcard').length,
+      cards: document.querySelectorAll('#tarot .tcard').length,
       expect: DATA.length,
       chips: document.querySelectorAll('.chip[data-cat]').length,
       addBtn: !!document.getElementById('chipAdd'),
-      iconsLoaded: [...document.querySelectorAll('#grid .tcard img.appicon')].length,
+      iconsLoaded: [...document.querySelectorAll('#tarot .tcard img.appicon')].length,
     }))()`);
     record('T2 塔罗网格渲染 + 花色标签 + 新建按钮',
       r.cards === r.expect && r.expect > 40 && r.chips === 8 && r.addBtn && r.iconsLoaded > 28, JSON.stringify(r));
@@ -109,8 +109,8 @@ async function main() {
       const dev = document.querySelector('.chip[data-cat="dev"]');
       const expect = +dev.querySelector('small').textContent;
       dev.click();
-      const shown = document.querySelectorAll('#grid .tcard').length;
-      const allSuit = [...document.querySelectorAll('#grid .tcard .face.back')].every(b => b.dataset.suit === '♠');
+      const shown = document.querySelectorAll('#tarot .tcard').length;
+      const allSuit = [...document.querySelectorAll('#tarot .tcard .face.back')].every(b => b.dataset.suit === '♠');
       document.querySelector('.chip[data-cat="all"]').click();
       return { expect, shown, allSuit };
     })()`);
@@ -120,7 +120,7 @@ async function main() {
   // T5 悬停翻面
   {
     const r = await ev(`(() => {
-      const card = document.querySelectorAll('#grid .tcard')[3];
+      const card = document.querySelectorAll('#tarot .tcard')[3];
       const inner = card.querySelector('.inner');
       card.dispatchEvent(new MouseEvent('mouseenter'));
       const a = inner.classList.contains('flipped');
@@ -133,26 +133,26 @@ async function main() {
 
   // T6 解读浮层（450ms hover intent；hidden 窗口 timer 节流可能 >1s，等待放宽）
   {
-    await ev(`document.querySelectorAll('#grid .tcard')[5].dispatchEvent(new MouseEvent('mouseenter'))`);
+    await ev(`document.querySelectorAll('#tarot .tcard')[5].dispatchEvent(new MouseEvent('mouseenter'))`);
     await sleep(1700);
     let r = await ev(`(() => {
       const el = document.getElementById('reading');
       const on = el && getComputedStyle(el).display !== 'none' && el.classList.contains('open');
       const txt = on ? el.querySelector('.reading__div').textContent : '';
       const nm = on ? el.querySelector('.reading__name').textContent : '';
-      document.querySelectorAll('#grid .tcard')[5].dispatchEvent(new MouseEvent('mouseleave'));
+      document.querySelectorAll('#tarot .tcard')[5].dispatchEvent(new MouseEvent('mouseleave'));
       return { on, txt, nm };
     })()`);
     const off = await ev(`(() => document.getElementById('reading') && document.getElementById('reading').style.display === 'none')()`);
     let t6ok = r.on && r.txt.length > 5 && r.nm && off;
     if (!t6ok) {
       // 节流兜底：重触发一次再等
-      await ev(`document.querySelectorAll('#grid .tcard')[5].dispatchEvent(new MouseEvent('mouseleave'))`);
+      await ev(`document.querySelectorAll('#tarot .tcard')[5].dispatchEvent(new MouseEvent('mouseleave'))`);
       await sleep(150);
-      await ev(`document.querySelectorAll('#grid .tcard')[5].dispatchEvent(new MouseEvent('mouseenter'))`);
+      await ev(`document.querySelectorAll('#tarot .tcard')[5].dispatchEvent(new MouseEvent('mouseenter'))`);
       await sleep(1700);
       r = await ev(`(() => { const el = document.getElementById('reading'); if (!el) return { on: null, txt: '', nm: '' }; return { on: getComputedStyle(el).display !== 'none' && el.classList.contains('open'), txt: el.querySelector('.reading__div').textContent, nm: el.querySelector('.reading__name').textContent }; })()`);
-      const off2 = await ev(`(() => { document.querySelectorAll('#grid .tcard')[5].dispatchEvent(new MouseEvent('mouseleave')); return document.getElementById('reading') ? document.getElementById('reading').style.display === 'none' : true; })()`);
+      const off2 = await ev(`(() => { document.querySelectorAll('#tarot .tcard')[5].dispatchEvent(new MouseEvent('mouseleave')); return document.getElementById('reading') ? document.getElementById('reading').style.display === 'none' : true; })()`);
       t6ok = r.on && r.txt.length > 5 && r.nm && off2;
     }
     record('T6 解读浮层出现/有牌意/移开隐藏', t6ok, JSON.stringify(r));
@@ -161,7 +161,7 @@ async function main() {
   // T7 右键菜单
   {
     const r = await ev(`(() => {
-      const card = [...document.querySelectorAll('#grid .tcard')].find(c => c.dataset.name === '千问');
+      const card = [...document.querySelectorAll('#tarot .tcard')].find(c => c.dataset.name === '千问');
       card.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 500, clientY: 400 }));
       const m = document.querySelector('.ctxmenu');
       if (!m) return { shown: false };
@@ -169,8 +169,8 @@ async function main() {
       const onItem = m.querySelector('.ctxmenu__item.on');
       return { shown: true, items, cur: onItem ? onItem.dataset.cat : null };
     })()`);
-    record('T7 右键菜单弹出（6 内置 + 未名 + 启动 = 8 项 + 当前归属高亮）',
-      r.shown && r.items === 8 && r.cur === 'misc', JSON.stringify(r));
+    record('T7 右键菜单弹出（置顶 + 6 内置 + 未名 + 启动 = 9 项 + 当前归属高亮）',
+      r.shown && r.items === 9 && r.cur === 'misc', JSON.stringify(r));
   }
 
   // T8 右键归类 → dev → 恢复
@@ -179,7 +179,7 @@ async function main() {
       const m = document.querySelector('.ctxmenu');
       [...m.querySelectorAll('.ctxmenu__item')].find(i => i.dataset.cat === 'dev').click();
       const a = DATA.find(x => x.name === '千问');
-      const card = [...document.querySelectorAll('#grid .tcard')].find(c => c.dataset.name === '千问');
+      const card = [...document.querySelectorAll('#tarot .tcard')].find(c => c.dataset.name === '千问');
       const devOk = catOf(a).id === 'dev' && card.querySelector('.face.back').dataset.suit === '♠' && !!card.querySelector('.custombadge');
       // 恢复自动
       card.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 500, clientY: 400 }));
@@ -194,7 +194,7 @@ async function main() {
   // T9 合成拖拽链：dragstart → chip dragover/drop
   {
     const r = await ev(`(() => {
-      const card = [...document.querySelectorAll('#grid .tcard')].find(c => c.dataset.name === '千问');
+      const card = [...document.querySelectorAll('#tarot .tcard')].find(c => c.dataset.name === '千问');
       const dt = new DataTransfer();
       card.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
       const data = dt.getData('text/plain');
@@ -241,7 +241,7 @@ async function main() {
         setCustomCat('千问', '${catId}');
         renderTarot(false);
         const a = DATA.find(x => x.name === '千问');
-        const card = [...document.querySelectorAll('#grid .tcard')].find(c => c.dataset.name === '千问');
+        const card = [...document.querySelectorAll('#tarot .tcard')].find(c => c.dataset.name === '千问');
         return { cat: catOf(a).id, suit: card.querySelector('.face.back').dataset.suit };
       })()`);
       record('T11 归入自定义类别（牌背角标=花色符号）', r2.cat === catId && r2.suit === '🎮', JSON.stringify(r2));
@@ -250,7 +250,7 @@ async function main() {
       const r3 = await ev(`(() => {
         const chip = [...document.querySelectorAll('.chip')].find(c => c.dataset.cat === '${catId}');
         chip.click();
-        const names = [...document.querySelectorAll('#grid .tcard')].map(c => c.dataset.name);
+        const names = [...document.querySelectorAll('#tarot .tcard')].map(c => c.dataset.name);
         document.querySelector('.chip[data-cat="all"]').click();
         return names;
       })()`);
@@ -536,18 +536,18 @@ async function main() {
     record('T26 新局（重发 52 / 步数清零）', r.count === 0 && r.cols === 52 && !r.won, JSON.stringify(r));
   }
 
-  // T27 切回塔罗
+  // T27 切回塔罗（顶排+网格合计=全量——常用置顶区会分走最多 10 张）
   {
     const r = await ev(`(() => {
       document.getElementById('btnMode').click();
       return {
         tarotShown: !document.getElementById('tarot').classList.contains('hidden'),
         fcHidden: document.getElementById('fcboard').classList.contains('hidden'),
-        cards: document.querySelectorAll('#grid .tcard').length,
+        cards: document.querySelectorAll('#tarot .tcard').length,
         expect: DATA.length,
       };
     })()`);
-    record('T27 切回塔罗（互斥/网格全量渲染）', r.tarotShown && r.fcHidden && r.cards === r.expect && r.expect > 40, JSON.stringify(r));
+    record('T27 切回塔罗（互斥/全量渲染=顶排+网格）', r.tarotShown && r.fcHidden && r.cards === r.expect && r.expect > 40, JSON.stringify(r));
   }
 
   // T28 残留检查：模式切换后右键菜单/解读浮层/弹窗全关
@@ -748,6 +748,32 @@ async function main() {
       JSON.stringify({ set: set1.ok, get: get1, persisted, badRejected: bad.ok === false, afterRollback: get2, restored: back.ok }));
   }
 
+  // T39 常用置顶区（pin 上顶排/不重复入网格/徽章/取消恢复 + 衰减排序生效）
+  {
+    const r = await ev(`(() => {
+      const name = DATA[0].name;
+      localStorage.setItem('ld_pinned', JSON.stringify([name]));
+      renderTarot(false);
+      const top = [...document.querySelectorAll('#topRow .tcard')].map(e => e.dataset.name);
+      const gridNames = [...document.querySelectorAll('#grid .tcard')].map(e => e.dataset.name);
+      const topVisible = document.getElementById('topRow').style.display !== 'none';
+      const inTop = top.includes(name);
+      const notDup = !gridNames.includes(name);
+      const pinBadge = !!document.querySelector('#topRow .pinbadge');
+      // 衰减：同次数下最近使用 > 30 天前使用
+      const now = { count: 5, last: Date.now() };
+      const old = { count: 5, last: Date.now() - 30 * 86400000 };
+      const decayOk = appScore(now) > appScore(old);
+      localStorage.setItem('ld_pinned', '[]');
+      renderTarot(false);
+      const backInTarot = [...document.querySelectorAll('#tarot .tcard')].some(e => e.dataset.name === name);
+      return { topVisible, inTop, notDup, pinBadge, decayOk, backInTarot, topN: top.length };
+    })()`);
+    record('T39 常用置顶区（pin/不重复/衰减/恢复）',
+      r.topVisible && r.inTop && r.notDup && r.pinBadge && r.decayOk && r.backInTarot && r.topN >= 1,
+      JSON.stringify(r));
+  }
+
   // 回塔罗（后续断言需要）
   await ev(`if (mode !== 'tarot') document.getElementById('btnMode').click()`);
 
@@ -756,12 +782,12 @@ async function main() {
     await ev(`renderTarot(false)`);
     const mv = await ev(`(() => {
       const grid = document.getElementById('grid');
-      if (!grid.querySelector('.tcard')) return { err: 'no-cards' };
+      if (!grid.querySelector('.tcard') && !document.querySelector('#topRow .tcard')) return { err: 'no-cards' };
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-      const e1 = grid.querySelector('.tcard.kb-focus');
+      const e1 = document.querySelector('#tarot .tcard.kb-focus');   // 含常用置顶区
       const f1 = e1 ? e1.dataset.name : null;
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-      const e2 = grid.querySelector('.tcard.kb-focus');
+      const e2 = document.querySelector('#tarot .tcard.kb-focus');
       return { f1, f2: e2 ? e2.dataset.name : null, moved: !!(f1 && e2 && f1 !== e2) };
     })()`);
     const enter = await ev(`(async () => {
