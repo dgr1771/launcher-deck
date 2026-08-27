@@ -143,12 +143,36 @@ function recordUsage(name) {
   try { fs.writeFileSync(USAGE_JSON, JSON.stringify(usage, null, 2)); } catch (e) { log('usage write fail', e); }
 }
 
+// Steam 游戏启动：exe 在 steamapps\common\<installdir>\ 下时，从 appmanifest 提取 appid，
+// 走 steam://rungameid/ 协议（Steam 未运行会自动拉起）——直拉 exe 无 Steam 上下文会静默自杀（BSide 实测）
+function steamAppIdFor(exe) {
+  try {
+    const m = String(exe).match(/steamapps[\\/]common[\\/]([^\\/]+)/i);
+    if (!m) return null;
+    const idx = String(exe).toLowerCase().indexOf('steamapps');
+    const steamapps = exe.slice(0, idx + 'steamapps'.length);
+    const installDir = m[1].toLowerCase();
+    for (const f of fs.readdirSync(steamapps)) {
+      if (!f.startsWith('appmanifest_') || !f.endsWith('.acf')) continue;
+      try {
+        const txt = fs.readFileSync(path.join(steamapps, f), 'utf8');
+        const dirM = txt.match(/"installdir"\s*"([^"]+)"/);
+        if (!dirM || dirM[1].toLowerCase() !== installDir) continue;
+        const idM = txt.match(/"appid"\s*"(\d+)"/);
+        if (idM) return idM[1];
+      } catch (e) {}
+    }
+  } catch (e) {}
+  return null;
+}
+
 // exe 直拉：跳过 cmd.exe 一跳（省一次进程创建），工作目录设为 exe 所在目录（cmd start 的等效行为）；
-// 直拉失败（ENOENT 等）自动回退 start 兜底
+// 直拉失败（ENOENT 等）自动回退 start 兜底。
+// 注意：spawn 的 error 是异步事件——必须等一小段确认窗口再报 direct，否则文件不存在也虚报成功
 function launchExeFast(exePath) {
   return new Promise((resolve) => {
     let done = false;
-    const finish = (via) => { if (!done) { done = true; resolve(via); } };
+    const finish = (via) => { if (!done) { done = true; clearTimeout(confirm); resolve(via); } };
     const fallback = () => {
       execAsync(`start "" "${exePath}"`, { shell: 'cmd.exe', windowsHide: true, timeout: 10 * 1000 })
         .then(() => finish('start-fallback')).catch(() => finish('fail'));
@@ -156,7 +180,7 @@ function launchExeFast(exePath) {
     try {
       const child = spawn(exePath, [], { detached: true, stdio: 'ignore', cwd: path.dirname(exePath) });
       child.on('error', fallback);
-      finish('direct');
+      const confirm = setTimeout(() => { if (!done) { child.unref(); finish('direct'); } }, 150);
     } catch (e) { fallback(); }
   });
 }
@@ -165,7 +189,12 @@ async function launchApp(appInfo) {
   const t0 = Date.now();
   try {
     let via;
-    if (appInfo.src === 'appx' && appInfo.uwp) {
+    const steamId = appInfo.exe ? steamAppIdFor(appInfo.exe) : null;
+    if (steamId) {
+      // Steam 游戏：协议启动（Steam 自动起）
+      await execAsync(`start "" "steam://rungameid/${steamId}"`, { shell: 'cmd.exe', windowsHide: true, timeout: 10 * 1000 });
+      via = 'steam:' + steamId;
+    } else if (appInfo.src === 'appx' && appInfo.uwp) {
       // UWP: shell:AppsFolder\<FamilyName>!<AppId>
       await execAsync(`explorer.exe "shell:AppsFolder\\${appInfo.uwp}"`, { windowsHide: true, timeout: 10 * 1000 });
       via = 'uwp';
@@ -273,7 +302,22 @@ function buildTrayMenu() {
 }
 
 // ---------- IPC ----------
-ipcMain.handle('deck:get-apps', () => getAppsInternal());
+let scanInFlight = false;
+ipcMain.handle('deck:get-apps', async () => {
+  // 缓存超 10 分钟 → 后台静默重扫（新装/更新路径的程序自动入阵；不阻塞返回，扫完推 apps-updated）
+  try {
+    const st = fs.statSync(APPS_JSON);
+    if (Date.now() - st.mtimeMs > 10 * 60 * 1000 && !scanInFlight) {
+      scanInFlight = true;
+      log('apps.json stale >10min, background rescan');
+      refreshScan()
+        .then(() => { if (panel && !panel.isDestroyed()) panel.webContents.send('deck:apps-updated'); })
+        .catch(() => {})
+        .finally(() => { scanInFlight = false; });
+    }
+  } catch (e) { /* no cache yet */ }
+  return getAppsInternal();
+});
 ipcMain.handle('deck:launch', (_e, appInfo) => {
   // 点按即收牌：感知卡顿的大头是"等启动调用完成才收起"（杀软首扫可达数百 ms）——先收，启动转后台
   if (panel && !panel.isDestroyed()) panel.hide();
