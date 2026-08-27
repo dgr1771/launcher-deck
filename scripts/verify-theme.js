@@ -34,10 +34,10 @@ async function main() {
   }
   const panelState = `(() => { const cs = getComputedStyle(document.getElementById('panel')); return { img: cs.backgroundImage.slice(0, 130), color: cs.backgroundColor, size: cs.backgroundSize, blur: cs.backdropFilter.slice(0, 30) }; })()`;
 
-  // 1) modal opens（无上传按钮——砍除后不应存在）
+  // 1) modal opens（纯预设双主题：无上传按钮、无取色器——均砍除后不应存在）
   let r = await ev(`(() => { document.getElementById('btnTheme').click(); const m = document.getElementById('themeModal'); return { shown: !!m, presets: m ? m.querySelectorAll('.preset').length : 0, uploadBtns: m ? m.querySelectorAll('.upbtn').length : -1, colorPickers: m ? m.querySelectorAll('input[type=color]').length : -1 }; })()`);
   console.log('modal:', JSON.stringify(r));
-  const modalOk = r.shown && r.presets === 3 && r.uploadBtns === 0 && r.colorPickers === 2;
+  const modalOk = r.shown && r.presets === 2 && r.uploadBtns === 0 && r.colorPickers === 0;
   await ev(`document.getElementById('themeModal') && document.getElementById('themeModal').remove()`);
 
   // 2) glass theme：蓝白渐变 + 深色底漆（浅色桌面可读性的关键）+ 强模糊
@@ -47,11 +47,11 @@ async function main() {
   const glassOk = r.img.includes('59, 130, 246') && r.img.includes('241, 245, 249') &&
     r.color.includes('8, 15, 26') && r.blur.includes('18');
 
-  // 3) custom color（改色即自定义预设——旧"预设门槛静默丢弃"缺陷的回归哨兵）
-  await ev(`setTheme({ preset: 'custom', panelColor: '#301040' }); applyTheme();`);
+  // 3) custom 已砍除：preset=custom 应被当 felt 兜底（不再有自定义分支）
+  await ev(`setTheme({ preset: 'custom' }); applyTheme();`);
   r = await ev(panelState);
-  console.log('custom-color:', JSON.stringify(r));
-  const colorOk = r.color.includes('48, 16, 64');
+  console.log('custom-fallback-felt:', JSON.stringify(r));
+  const colorOk = r.img.includes('radial-gradient');
 
   // 4) reset
   await ev(`setTheme({ preset: 'felt' }); applyTheme();`);
@@ -62,7 +62,7 @@ async function main() {
   // 5) 恢复玻璃（用户当前主题）
   await ev(`setTheme({ preset: 'glass' }); applyTheme();`);
 
-  const allOk = modalOk && glassOk && colorOk && feltOk;
+  const allOk = modalOk && glassOk && colorOk && feltOk;  // colorOk 现为 custom→felt 兜底断言
   console.log(allOk ? 'THEME ALL OK' : 'THEME FAIL');
   ws.close();
   process.exit(allOk ? 0 : 1);

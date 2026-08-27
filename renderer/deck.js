@@ -562,17 +562,6 @@ function applyTheme() {
     r.setProperty('--cardback-img', 'none');
     r.setProperty('--cardback-under', 'linear-gradient(150deg, rgba(37, 99, 235, 0.52) 0%, rgba(191, 219, 254, 0.24) 100%)');
     r.setProperty('--cardback-color', 'rgba(10, 25, 50, 0.78)');
-  } else if (t.preset === 'custom') {
-    // 自定义 = 纯配色（图片背板/牌背上传已砍除：可读性代价大、收益低，用户决策 2026-08-22）
-    if (t.panelColor) {
-      r.setProperty('--panel-img', 'none');
-      r.setProperty('--panel-bg-color', t.panelColor);
-    }
-    if (t.cardColor) {
-      r.setProperty('--cardback-img', 'none');
-      r.setProperty('--cardback-under', 'none');
-      r.setProperty('--cardback-color', t.cardColor);
-    }
   }
 }
 
@@ -584,6 +573,7 @@ function openThemeModal() {
   modal = document.createElement('div');
   modal.id = 'themeModal';
   modal.className = 'catmodal-pop';
+  // 纯预设双主题（自定义配色已按用户决策砍除：配置面最小化）
   modal.innerHTML = `
     <div class="catmodal thememodal">
       <div class="catmodal__title">🎨 外观主题</div>
@@ -591,21 +581,10 @@ function openThemeModal() {
         <label>预设</label>
         <div class="presets">
           <span class="preset${t.preset === 'felt' ? ' on' : ''}" data-preset="felt">🌿 呢绒</span>
-          <span class="preset${t.preset === 'glass' ? ' on' : ''}" data-preset="glass">💎 透明玻璃</span>
-          <span class="preset${t.preset === 'custom' ? ' on' : ''}" data-preset="custom">🎨 自定义</span>
+          <span class="preset${t.preset === 'glass' ? ' on' : ''}" data-preset="glass">💎 蓝白玻璃</span>
         </div>
       </div>
-      <div class="sep"></div>
-      <div class="title2">自定义配色</div>
-      <div class="row">
-        <label>面板底色</label>
-        <input type="color" id="tmPanelColor" value="${t.panelColor || '#0c1210'}">
-      </div>
-      <div class="row">
-        <label>牌背底色</label>
-        <input type="color" id="tmCardColor" value="${t.cardColor || '#1a2038'}">
-      </div>
-      <div class="catmodal__hint">调整配色会自动切到「🎨 自定义」预设</div>
+      <div class="catmodal__hint">点选即预览所需主题，「应用」生效</div>
       <div class="catmodal__btns">
         <button class="plain" data-act="reset">恢复默认</button>
         <button data-act="ok">应 用</button>
@@ -617,17 +596,10 @@ function openThemeModal() {
   modal.querySelectorAll('.preset').forEach(p => p.addEventListener('click', () => {
     modal.querySelectorAll('.preset').forEach(x => x.classList.remove('on'));
     p.classList.add('on');
+    // 点选即预览
+    setTheme({ preset: p.dataset.preset });
+    applyTheme();
   }));
-  // 改配色 = 想自定义：自动勾选自定义预设（预设门槛曾让上传/配色静默失效）
-  ['tmPanelColor', 'tmCardColor'].forEach(id => {
-    modal.querySelector('#' + id).addEventListener('input', () => {
-      const c = modal.querySelector('.preset[data-preset="custom"]');
-      if (c && !c.classList.contains('on')) {
-        modal.querySelectorAll('.preset').forEach(x => x.classList.remove('on'));
-        c.classList.add('on');
-      }
-    });
-  });
 
   modal.addEventListener('click', (e) => {
     if (e.target === modal) { modal.remove(); return; }
@@ -644,15 +616,11 @@ function openThemeModal() {
       const presetEl = modal.querySelector('.preset.on');
       const t2 = getTheme();
       t2.preset = presetEl ? presetEl.dataset.preset : 'felt';
-      if (t2.preset === 'custom') {
-        t2.panelColor = modal.querySelector('#tmPanelColor').value;
-        t2.cardColor = modal.querySelector('#tmCardColor').value;
-      }
       setTheme(t2);
       applyTheme();
       modal.remove();
       Sound.land();
-      toast(t2.preset === 'glass' ? '💎 透明玻璃已启用' : t2.preset === 'custom' ? '🎨 自定义配色已应用' : '🌿 呢绒已恢复');
+      toast(t2.preset === 'glass' ? '💎 蓝白玻璃已启用' : '🌿 呢绒已恢复');
       return;
     }
   });

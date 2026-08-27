@@ -1,7 +1,7 @@
 {
   "name": "launcher-deck",
   "productName": "应用牌堆 Launcher Deck",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "应用牌堆——把本机所有程序洗成一副塔罗牌，零输入翻牌即达",
   "author": "隔壁村布布",
   "homepage": "https://github.com/dgr1771/launcher-deck",
