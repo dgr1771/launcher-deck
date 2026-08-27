@@ -352,6 +352,20 @@ if (!gotLock) {
   });
   app.whenReady().then(async () => {
     log('=== launcher-deck start ===');
+    // 光灵状态端点
+    try {
+      const http = require('http');
+      http.createServer((req, res) => {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        if (req.url === '/api/status' || req.url === '/status') {
+          const apps = getAppsInternal();
+          const recent = apps.slice(0, 5).map(a => a.name);
+          res.end(JSON.stringify({ project: '应用牌堆', status: 'running', totalApps: apps.length, recentLaunches: recent, summary: `${apps.length}个应用，最近启动：${recent.join('、') || '无'}` }));
+        } else { res.statusCode = 404; res.end('{}'); }
+      }).listen(9603, '127.0.0.1');
+      log('status endpoint on 9603');
+    } catch (e) { /* 可选 */ }
     createPanel();
     createTray();
     const ok = globalShortcut.register(hotkey, togglePanel);
