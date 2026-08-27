@@ -549,19 +549,19 @@ function applyTheme() {
    '--panel-backdrop', '--panel-shadow', '--accent-color',
    '--cardback-img', '--cardback-under', '--cardback-color', '--cardback-size'].forEach(v => r.removeProperty(v));
   if (t.preset === 'glass') {
-    // 蒂芙尼蓝 × 粉 毛玻璃：染色渐变 + 强模糊提饱和 + 白高光描边
+    // 蓝白毛玻璃：天蓝→白 染色渐变 + 强模糊提饱和 + 白高光描边（Win11 Fluent 取向）
     // 深色底漆（bg-color 垫在 background-image 渐变之下）：白/浅色桌面也保证白字可读——
     // 透明染色层只对深壁纸有效，纯透曾导致浅色桌面下界面看不清
-    r.setProperty('--panel-bg-color', 'rgba(7, 13, 17, 0.55)');
-    r.setProperty('--panel-img', 'linear-gradient(160deg, rgba(10, 186, 181, 0.34) 0%, rgba(255, 123, 172, 0.22) 100%)');
-    r.setProperty('--panel-border', 'rgba(255, 255, 255, 0.45)');
-    r.setProperty('--panel-backdrop', 'blur(18px) saturate(170%)');
-    r.setProperty('--panel-shadow', 'inset 0 1px 0 rgba(255, 255, 255, 0.30), 0 24px 70px rgba(0, 0, 0, 0.45)');
-    r.setProperty('--accent-color', '255, 123, 172');   // 粉强调
-    // 牌背：深底上透出蒂芙尼→粉渐变，白字可读
+    r.setProperty('--panel-bg-color', 'rgba(8, 15, 26, 0.58)');
+    r.setProperty('--panel-img', 'linear-gradient(160deg, rgba(59, 130, 246, 0.32) 0%, rgba(241, 245, 249, 0.18) 100%)');
+    r.setProperty('--panel-border', 'rgba(255, 255, 255, 0.5)');
+    r.setProperty('--panel-backdrop', 'blur(18px) saturate(160%)');
+    r.setProperty('--panel-shadow', 'inset 0 1px 0 rgba(255, 255, 255, 0.32), 0 24px 70px rgba(0, 0, 0, 0.45)');
+    r.setProperty('--accent-color', '96, 165, 250');   // 天蓝强调
+    // 牌背：深海军蓝底透 蓝→白 渐变，白字可读
     r.setProperty('--cardback-img', 'none');
-    r.setProperty('--cardback-under', 'linear-gradient(150deg, rgba(10, 186, 181, 0.55) 0%, rgba(255, 123, 172, 0.42) 100%)');
-    r.setProperty('--cardback-color', 'rgba(9, 34, 38, 0.72)');
+    r.setProperty('--cardback-under', 'linear-gradient(150deg, rgba(37, 99, 235, 0.52) 0%, rgba(191, 219, 254, 0.24) 100%)');
+    r.setProperty('--cardback-color', 'rgba(10, 25, 50, 0.78)');
   } else if (t.preset === 'custom') {
     // 自定义 = 纯配色（图片背板/牌背上传已砍除：可读性代价大、收益低，用户决策 2026-08-22）
     if (t.panelColor) {

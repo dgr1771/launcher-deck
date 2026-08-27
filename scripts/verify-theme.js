@@ -40,12 +40,12 @@ async function main() {
   const modalOk = r.shown && r.presets === 3 && r.uploadBtns === 0 && r.colorPickers === 2;
   await ev(`document.getElementById('themeModal') && document.getElementById('themeModal').remove()`);
 
-  // 2) glass theme：蒂芙尼渐变 + 深色底漆（浅色桌面可读性的关键）+ 强模糊
+  // 2) glass theme：蓝白渐变 + 深色底漆（浅色桌面可读性的关键）+ 强模糊
   await ev(`setTheme({ preset: 'glass' }); applyTheme();`);
   r = await ev(panelState);
   console.log('glass:', JSON.stringify(r));
-  const glassOk = r.img.includes('10, 186, 181') && r.img.includes('255, 123, 172') &&
-    r.color.includes('7, 13, 17') && r.blur.includes('18');
+  const glassOk = r.img.includes('59, 130, 246') && r.img.includes('241, 245, 249') &&
+    r.color.includes('8, 15, 26') && r.blur.includes('18');
 
   // 3) custom color（改色即自定义预设——旧"预设门槛静默丢弃"缺陷的回归哨兵）
   await ev(`setTheme({ preset: 'custom', panelColor: '#301040' }); applyTheme();`);

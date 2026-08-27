@@ -361,7 +361,7 @@ async function main() {
         return { cols, total: cols.reduce((a, b) => a + b, 0), visible };
       })()`);
       if (JSON.stringify(r.cols) === JSON.stringify([7,7,7,7,6,6,6,6]) && r.total === 52 && r.visible === 52) break;
-      await sleep(2500);
+      await sleep(3500);   // 发牌动画轮询重试（等牌全部可见）
     }
     const expected = JSON.stringify([7, 7, 7, 7, 6, 6, 6, 6]);
     record('T18 标准发牌 7,7,7,7,6,6,6,6 = 52 全可见',
@@ -693,7 +693,7 @@ async function main() {
       document.getElementById('btnMode').click();   // game -> loadGame 恢复
       return { dealNo: game.dealNo, count: game.moveCount, restored: true };
     })()`);
-    await sleep(2500);
+    await sleep(3500);   // 恢复局 positionGame(true) 重发动画全程约 2.7s，2500ms 卡边界偶发 click:false
     const clickRes = await ev(`(() => {
       for (let i = 0; i < 8; i++) {
         const col = game.cols[i];
