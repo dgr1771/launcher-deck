@@ -37,7 +37,7 @@ async function main() {
   // 1) modal opens（纯预设双主题：无上传按钮、无取色器——均砍除后不应存在）
   let r = await ev(`(() => { document.getElementById('btnTheme').click(); const m = document.getElementById('themeModal'); return { shown: !!m, presets: m ? m.querySelectorAll('.preset').length : 0, uploadBtns: m ? m.querySelectorAll('.upbtn').length : -1, colorPickers: m ? m.querySelectorAll('input[type=color]').length : -1 }; })()`);
   console.log('modal:', JSON.stringify(r));
-  const modalOk = r.shown && r.presets === 2 && r.uploadBtns === 0 && r.colorPickers === 0;
+  const modalOk = r.shown && r.presets === 4 && r.uploadBtns === 0 && r.colorPickers === 0;
   await ev(`document.getElementById('themeModal') && document.getElementById('themeModal').remove()`);
 
   // 2) glass theme：蓝白渐变 + 深色底漆（浅色桌面可读性的关键）+ 强模糊
@@ -53,6 +53,16 @@ async function main() {
   console.log('custom-fallback-felt:', JSON.stringify(r));
   const colorOk = r.img.includes('radial-gradient');
 
+  // 3b) 少女心 / 豆沙绿
+  await ev(`setTheme({ preset: 'sakura' }); applyTheme();`);
+  r = await ev(panelState);
+  console.log('sakura:', JSON.stringify(r));
+  const sakuraOk = r.img.includes('244, 114, 182') && r.color.includes('22, 10, 20');
+  await ev(`setTheme({ preset: 'sage' }); applyTheme();`);
+  r = await ev(panelState);
+  console.log('sage:', JSON.stringify(r));
+  const sageOk = r.img.includes('139, 175, 124') && r.color.includes('10, 18, 12');
+
   // 4) reset
   await ev(`setTheme({ preset: 'felt' }); applyTheme();`);
   r = await ev(panelState);
@@ -62,7 +72,7 @@ async function main() {
   // 5) 恢复玻璃（用户当前主题）
   await ev(`setTheme({ preset: 'glass' }); applyTheme();`);
 
-  const allOk = modalOk && glassOk && colorOk && feltOk;  // colorOk 现为 custom→felt 兜底断言
+  const allOk = modalOk && glassOk && sakuraOk && sageOk && colorOk && feltOk;  // colorOk 现为 custom→felt 兜底断言
   console.log(allOk ? 'THEME ALL OK' : 'THEME FAIL');
   ws.close();
   process.exit(allOk ? 0 : 1);

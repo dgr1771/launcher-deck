@@ -548,20 +548,38 @@ function applyTheme() {
   ['--panel-img', '--panel-bg-color', '--panel-bg-size', '--panel-border', '--panel-blur',
    '--panel-backdrop', '--panel-shadow', '--accent-color',
    '--cardback-img', '--cardback-under', '--cardback-color', '--cardback-size'].forEach(v => r.removeProperty(v));
-  if (t.preset === 'glass') {
-    // 蓝白毛玻璃：天蓝→白 染色渐变 + 强模糊提饱和 + 白高光描边（Win11 Fluent 取向）
-    // 深色底漆（bg-color 垫在 background-image 渐变之下）：白/浅色桌面也保证白字可读——
-    // 透明染色层只对深壁纸有效，纯透曾导致浅色桌面下界面看不清
-    r.setProperty('--panel-bg-color', 'rgba(8, 15, 26, 0.58)');
-    r.setProperty('--panel-img', 'linear-gradient(160deg, rgba(59, 130, 246, 0.32) 0%, rgba(241, 245, 249, 0.18) 100%)');
+  // 毛玻璃系预设表：加主题=加一行（深色底漆统一保证浅色壁纸下白字可读）
+  const GLASSY = {
+    glass: {  // 蓝白玻璃：天蓝→白（Win11 Fluent 取向）
+      img: 'linear-gradient(160deg, rgba(59, 130, 246, 0.32) 0%, rgba(241, 245, 249, 0.18) 100%)',
+      coat: 'rgba(8, 15, 26, 0.58)', accent: '96, 165, 250',
+      back: 'linear-gradient(150deg, rgba(37, 99, 235, 0.52) 0%, rgba(191, 219, 254, 0.24) 100%)',
+      backBase: 'rgba(10, 25, 50, 0.78)',
+    },
+    sakura: {  // 少女心：樱粉→淡紫粉
+      img: 'linear-gradient(160deg, rgba(244, 114, 182, 0.32) 0%, rgba(216, 180, 254, 0.20) 100%)',
+      coat: 'rgba(22, 10, 20, 0.58)', accent: '244, 114, 182',
+      back: 'linear-gradient(150deg, rgba(236, 72, 153, 0.45) 0%, rgba(251, 207, 232, 0.22) 100%)',
+      backBase: 'rgba(42, 12, 36, 0.78)',
+    },
+    sage: {  // 豆沙绿护眼：豆沙绿→米白
+      img: 'linear-gradient(160deg, rgba(139, 175, 124, 0.32) 0%, rgba(232, 238, 220, 0.20) 100%)',
+      coat: 'rgba(10, 18, 12, 0.55)', accent: '139, 175, 124',
+      back: 'linear-gradient(150deg, rgba(106, 144, 80, 0.48) 0%, rgba(215, 230, 196, 0.20) 100%)',
+      backBase: 'rgba(16, 34, 22, 0.78)',
+    },
+  };
+  const g = GLASSY[t.preset];
+  if (g) {
+    r.setProperty('--panel-bg-color', g.coat);
+    r.setProperty('--panel-img', g.img);
     r.setProperty('--panel-border', 'rgba(255, 255, 255, 0.5)');
     r.setProperty('--panel-backdrop', 'blur(18px) saturate(160%)');
     r.setProperty('--panel-shadow', 'inset 0 1px 0 rgba(255, 255, 255, 0.32), 0 24px 70px rgba(0, 0, 0, 0.45)');
-    r.setProperty('--accent-color', '96, 165, 250');   // 天蓝强调
-    // 牌背：深海军蓝底透 蓝→白 渐变，白字可读
+    r.setProperty('--accent-color', g.accent);
     r.setProperty('--cardback-img', 'none');
-    r.setProperty('--cardback-under', 'linear-gradient(150deg, rgba(37, 99, 235, 0.52) 0%, rgba(191, 219, 254, 0.24) 100%)');
-    r.setProperty('--cardback-color', 'rgba(10, 25, 50, 0.78)');
+    r.setProperty('--cardback-under', g.back);
+    r.setProperty('--cardback-color', g.backBase);
   }
 }
 
@@ -582,6 +600,8 @@ function openThemeModal() {
         <div class="presets">
           <span class="preset${t.preset === 'felt' ? ' on' : ''}" data-preset="felt">🌿 呢绒</span>
           <span class="preset${t.preset === 'glass' ? ' on' : ''}" data-preset="glass">💎 蓝白玻璃</span>
+          <span class="preset${t.preset === 'sakura' ? ' on' : ''}" data-preset="sakura">🌸 少女心</span>
+          <span class="preset${t.preset === 'sage' ? ' on' : ''}" data-preset="sage">🍵 豆沙绿</span>
         </div>
       </div>
       <div class="catmodal__hint">点选即预览所需主题，「应用」生效</div>
@@ -620,7 +640,9 @@ function openThemeModal() {
       applyTheme();
       modal.remove();
       Sound.land();
-      toast(t2.preset === 'glass' ? '💎 蓝白玻璃已启用' : '🌿 呢绒已恢复');
+      toast(t2.preset === 'glass' ? '💎 蓝白玻璃已启用'
+          : t2.preset === 'sakura' ? '🌸 少女心已启用'
+          : t2.preset === 'sage' ? '🍵 豆沙绿已启用' : '🌿 呢绒已恢复');
       return;
     }
   });
