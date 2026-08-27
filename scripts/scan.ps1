@@ -174,7 +174,10 @@ foreach ($p in $paths) {
         $name = $it.DisplayName
         if (-not $name) { continue }
         if ($it.SystemComponent -eq 1) { continue }
-        if ($it.WindowsInstaller -eq 1 -and -not $it.DisplayIcon -and -not $it.InstallLocation) { continue }
+        if ($it.WindowsInstaller -eq 1 -and -not $it.DisplayIcon -and -not $it.InstallLocation) {
+            # MSI 三无多为运行库噪音——但开始菜单有快捷方式的是正经应用（RealVNC Viewer 实测被此规则误杀）
+            if (-not (Resolve-FromStartMenu $name)) { continue }
+        }
         if ($name -match $noise) { continue }
         if (-not $seen.Add($name)) { continue }
 
@@ -202,12 +205,17 @@ foreach ($p in $paths) {
             } catch {}
         }
 
+        $exeTarget = Resolve-LaunchTarget $it $iconPath   # real launch target, separate from icon path
+        if (-not $exeTarget) { continue }   # 四级链都解析不到启动目标：死牌不入阵（SangforVNC 类组件，留着点不开）
+        if (-not $icon) { try { $icon = Get-ExeIcon $exeTarget } catch {} }
+        # 图标兜底：直接从启动目标 exe 提（MSI 三无救援牌实测缺图标）
+
         $apps.Add([PSCustomObject]@{
             name = $name
             pub  = [string]$it.Publisher
             ver  = [string]$it.DisplayVersion
             date = $date
-            exe  = (Resolve-LaunchTarget $it $iconPath)   # real launch target, separate from icon path
+            exe  = $exeTarget
             icon = $icon
             src  = "registry"
             uwp  = ""
