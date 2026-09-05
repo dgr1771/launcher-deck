@@ -252,6 +252,7 @@ function createPanel() {
   panel.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   panel.on('blur', () => {
     if (suspendHide) return;   // 对话框打开中：不收起
+    if (process.env.DECK_STAY) return;   // 录屏联测：面板常驻不自动收
     // 失焦收牌（延迟防瞬时焦点抖动误收）
     clearTimeout(hideTimer);
     hideTimer = setTimeout(() => { if (panel && !panel.isDestroyed()) panel.hide(); }, 220);
