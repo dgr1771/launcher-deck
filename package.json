@@ -3,7 +3,7 @@
   "productName": "应用牌堆 Launcher Deck",
   "version": "0.2.7",
   "description": "应用牌堆——把本机所有程序洗成一副塔罗牌，零输入翻牌即达",
-  "author": "隔壁村布布",
+  "author": "隔壁村布布 (dgr1771)",
   "homepage": "https://github.com/dgr1771/launcher-deck",
   "main": "main.js",
   "scripts": {
@@ -51,5 +51,6 @@
   },
   "dependencies": {
     "pinyin-pro": "^3.29.3"
-  }
+  },
+  "license": "CC-BY-NC-4.0"
 }
