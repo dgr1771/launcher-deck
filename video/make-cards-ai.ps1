@@ -77,7 +77,7 @@ function New-Sub {
 
 New-Sub "v-ai-1.png" "我把 AI 当编程搭档"
 New-Sub "v-ai-2.png" "30 天写了 3 个桌面软件"
-New-Sub "v-ai-3.png" "这个塔罗启动器 · AI 一起写的"
+New-Sub "v-ai-3.png" "这个应用启动器 · AI 一起写的"
 New-Sub "v-ai-4.png" "AI 逐帧复刻了洗牌动画"
 New-Sub "v-ai-5.png" "它还揪出一个系统级隐藏 bug"
 New-Sub "v-ai-6.png" "一个人 · 就是一个团队"
