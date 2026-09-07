@@ -32,3 +32,5 @@ video/mini*.mp4
 video/test_*.mp4
 video/capture-done.json
 video/build-clips.bat
+
+release-b2/
