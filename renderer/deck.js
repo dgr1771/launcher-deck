@@ -1,6 +1,6 @@
 /* ============================================================
-   Launcher Deck — 塔罗牌阵（启动）+ 空当接龙（游戏）
-   启动模式：塔罗网格，全牌可见无遮挡，悬停翻面、点击启动。
+   Launcher Deck — 应用一屏（启动）+ 空当接龙（游戏）
+   启动模式：应用卡片网格，全牌可见无遮挡，悬停翻面、点击启动。
    游戏模式：标准 FreeCell（纯游戏，不可启动应用）。
    52 张 = 48 应用牌（频率→点数，A=最常用）+ 4 张 Joker 金牌(K)。
    开局洗牌动画 → 发牌；序列移动/自由位/回收位/悔棋/胜利。
@@ -15,7 +15,7 @@ function rawApps(all) {
   });
 }
 
-// ---------- 分类（塔罗花色） ----------
+// ---------- 分类（花色） ----------
 const CATS = [
   { id: 'social',  suit: '♦', icon: '♦', name: '社交通讯',
     kw: ['微信','weixin','wechat','qq','telegram','discord','dingtalk','钉钉','feishu','飞书','lark','skype','mail','邮件','会议','meeting','zoom','teams','message','短信','联系'] },
@@ -234,7 +234,7 @@ function buildDeck() {
 }
 
 // ============================================================
-// 塔罗牌阵（启动模式）
+// 应用一屏（启动模式）
 // ============================================================
 let filterCat = 'all';
 let searchQ = '';
@@ -372,7 +372,7 @@ function showCatMenu(a, x, y) {
   ];
   ctxMenu.innerHTML = `
     <div class="ctxmenu__title">「${escapeHTML(a.name)}」归类到</div>
-    <div class="ctxmenu__item" data-act="pin">${isPinned(a.name) ? '📌 取消置顶（回牌阵）' : '📌 置顶到常用区'}</div>
+    <div class="ctxmenu__item" data-act="pin">${isPinned(a.name) ? '📌 取消置顶' : '📌 置顶到常用区'}</div>
     <div class="ctxmenu__sep"></div>
     ${items.map(it => `
       <div class="ctxmenu__item${it.id === cur ? ' on' : ''}" data-cat="${it.id}">
@@ -760,7 +760,7 @@ function renderTarot(deal) {
   const grid = $('grid');
   grid.innerHTML = rest.length
     ? rest.map(a => tcardHTML(a)).join('')
-    : (list.length ? '<div class="empty-hint">这一花色的牌都在上方常用区 · 右键取消置顶可回到牌阵</div>'
+    : (list.length ? '<div class="empty-hint">这一花色的牌都在上方常用区 · 右键取消置顶可回到列表</div>'
                    : '<div class="empty-hint">这一花色下没有牌 · 换个花色或清空搜索</div>');
 
   document.querySelectorAll('#tarot .tcard').forEach((card, i) => {
@@ -824,7 +824,7 @@ function renderTarot(deal) {
   kbIdx = -1;   // 网格重建，键盘选牌作废
   const used = DATA.filter(x => x.count > 0).length;
   $('subtitle').innerHTML =
-    `本机 <b>${DATA.length}</b> 款程序入阵 · 已启用 <b>${used}</b> 款 · 常用自动浮前 · <b>零输入</b> — 翻牌即达`;
+    `本机 <b>${DATA.length}</b> 款程序 · 已启用 <b>${used}</b> 款 · 常用自动浮前 · <b>零输入</b> — 点开即达`;
   fitTarotCards();
 }
 
@@ -1273,9 +1273,9 @@ function checkWin() {
     $('winBox').innerHTML = `
       <div class="fph">🏆</div>
       <div class="ftitle">牌运亨通</div>
-      <div class="ftext">${game.moveCount} 步清空牌阵——今日宜乘胜追击。</div>
-      <div class="fmeta">— 空当接龙 · 应用牌堆 —</div>
-      <div class="fbtns"><button class="plain" data-act="new">再来一局</button><button data-act="back">回应用牌阵</button></div>`;
+      <div class="ftext">${game.moveCount} 步通关——今日宜乘胜追击。</div>
+      <div class="fmeta">— 空当接龙 · 唤启 —</div>
+      <div class="fbtns"><button class="plain" data-act="new">再来一局</button><button data-act="back">回应用一屏</button></div>`;
     const pop = $('winPop');
     pop.classList.add('show');
     later(() => pop.classList.add('open'));
@@ -1452,8 +1452,8 @@ function setMode(m) {
   $('fcboard').classList.toggle('hidden', m !== 'game');
   $('gameBtns').style.display = m === 'game' ? 'flex' : 'none';
   $('btnMode').innerHTML = (m === 'game' ? IC.deck : IC.gamepad) +
-    '<span>' + (m === 'game' ? '应用牌阵' : '游戏模式') + '</span>';
-  $('modeTag').textContent = m === 'game' ? '· 空当接龙 · 纯游戏' : '· 应用牌阵';
+    '<span>' + (m === 'game' ? '应用一屏' : '游戏模式') + '</span>';
+  $('modeTag').textContent = m === 'game' ? '· 空当接龙 · 纯游戏' : '· 应用一屏';
   $('hint').textContent = m === 'game'
     ? '点牌选中 · 再点目标移动 · 红黑交替降序 · 回收位 A→K（游戏模式不启动应用）'
     : 'Ctrl+J 收起 · 右键卡片自定义归类 · 悬停看牌意 · 点击启动（也可拖牌到花色标签归类）';
@@ -1562,7 +1562,7 @@ $('btnHotkey').addEventListener('click', openHotkeyModal);
 $('btnSound').addEventListener('click', (e) => { e.currentTarget.innerHTML = Sound.toggle() ? IC.volume : IC.mute; });
 $('btnClose').addEventListener('click', () => window.deck.hide());
 
-// ---------- 全键盘导航（塔罗模式）：方向键选牌 · Enter 启动 · 鼠标移入即让位 ----------
+// ---------- 全键盘导航：方向键选牌 · Enter 启动 · 鼠标移入即让位 ----------
 let kbIdx = -1;
 function kbCards() { return [...document.querySelectorAll('#tarot .tcard')]; }   // 含常用置顶区
 function kbClear() {
@@ -1600,7 +1600,7 @@ function kbMove(dx, dy) {
 }
 
 document.addEventListener('keydown', (e) => {
-  // 全键盘导航（塔罗模式）：方向键选牌 · Enter 启动；搜索框聚焦/弹层打开时让位
+  // 全键盘导航：方向键选牌 · Enter 启动；搜索框聚焦/弹层打开时让位
   if (mode === 'tarot' && document.activeElement !== $('searchInput') &&
       !$('searchResult').classList.contains('show') && !document.querySelector('.catmodal-pop.open')) {
     const kk = e.key;
@@ -1652,7 +1652,7 @@ function later(fn) {
 }
 
 // ---------- 布局自适应 ----------
-// 塔罗牌尺寸自适应：全部牌完整可见（产品目标"全牌可见"），放不下时按宽高比逐步缩小
+// 牌面尺寸自适应：全部牌完整可见（产品目标"全牌可见"），放不下时按宽高比逐步缩小
 const TC_RATIO = 102 / 148;
 function fitTarotCards() {
   const grid = $('grid');

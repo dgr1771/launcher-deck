@@ -1,6 +1,6 @@
 /* ============================================================
-   Launcher Deck 应用牌堆 — 主进程
-   托盘常驻 + Ctrl+J 全局热键唤起牌阵面板；
+   Launcher Deck 唤启 — 主进程
+   托盘常驻 + Ctrl+J 全局热键唤起应用面板；
    扫描本机应用（PowerShell 管线，异步）、记录启动频率、
    exe / UWP 双通道启动。
 
@@ -268,7 +268,7 @@ function createPanel() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      backgroundThrottling: false,   // 隐藏窗口不节流：牌堆随时唤起秒响应，动画/定时器不被拖慢
+      backgroundThrottling: false,   // 隐藏窗口不节流：唤启随时唤起秒响应，动画/定时器不被拖慢
     },
   });
   panel.loadFile(path.join(__dirname, 'renderer', 'index.html'));
@@ -310,7 +310,7 @@ function createTray() {
 function buildTrayMenu() {
   if (!tray) return;
   const menu = Menu.buildFromTemplate([
-    { label: `展开牌堆（${hotkey}）`, click: () => togglePanel() },
+    { label: `展开应用一屏（${hotkey}）`, click: () => togglePanel() },
     { label: '重新扫描本机应用', click: async () => { await refreshScan(); if (panel) panel.webContents.send('deck:apps-updated'); } },
     { label: (app.getLoginItemSettings().openAtLogin ? '✓ ' : '') + '开机自启', click: () => {
       const on = !app.getLoginItemSettings().openAtLogin;
@@ -321,7 +321,7 @@ function buildTrayMenu() {
     { label: '退出', click: () => { app.quit(); } },
   ]);
   tray.setContextMenu(menu);
-  tray.setToolTip(`应用牌堆 · ${hotkey} 唤起`);
+  tray.setToolTip(`唤启 · ${hotkey} 唤起`);
 }
 
 // ---------- IPC ----------
@@ -384,7 +384,7 @@ if (!gotLock) {
         if (req.url === '/api/status' || req.url === '/status') {
           const apps = getAppsInternal();
           const recent = apps.slice(0, 5).map(a => a.name);
-          res.end(JSON.stringify({ project: '应用牌堆', status: 'running', totalApps: apps.length, recentLaunches: recent, summary: `${apps.length}个应用，最近启动：${recent.join('、') || '无'}` }));
+          res.end(JSON.stringify({ project: '唤启', status: 'running', totalApps: apps.length, recentLaunches: recent, summary: `${apps.length}个应用，最近启动：${recent.join('、') || '无'}` }));
         } else { res.statusCode = 404; res.end('{}'); }
       }).listen(9603, '127.0.0.1');
       log('status endpoint on 9603');
@@ -398,7 +398,7 @@ if (!gotLock) {
       try {
         tray.displayBalloon({
           iconType: 'info',
-          title: '应用牌堆',
+          title: '唤启',
           content: `快捷键 ${hotkey} 被其他程序占用。点托盘图标可打开面板；在面板 ⌨ 里换一组快捷键。`,
         });
       } catch (e) { log('balloon fail', e && e.message); }
