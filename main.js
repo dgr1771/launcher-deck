@@ -63,6 +63,18 @@ function readJson(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { return fallback; }
 }
 
+// 内置系统位置牌（不走扫描：shell 虚拟文件夹注册表里没有）
+const BUILTIN_APPS = [
+  {
+    name: '回收站',
+    pub: 'System',
+    exe: 'shell:RecycleBinFolder',
+    icon: (() => { try { return fs.readFileSync(path.join(__dirname, 'assets', 'recyclebin.uri'), 'utf8').trim(); } catch (e) { return ''; } })(),
+    src: 'shell',
+    uwp: '',
+  },
+];
+
 // ---------- 设置（全局快捷键——主进程持久化，要在窗口创建前就绪） ----------
 const DEFAULT_HOTKEY = 'Ctrl+J';
 let hotkey = DEFAULT_HOTKEY;
@@ -101,10 +113,16 @@ function registerHotkey(acc) {
 function getAppsInternal() {
   const data = readJson(APPS_JSON, { apps: [] });
   const usage = readJson(USAGE_JSON, {});
-  return (data.apps || []).map(a => {
+  const merged = (data.apps || []).map(a => {
     const u = usage[a.name] || {};
     return { ...a, count: u.count || 0, last: u.last || 0 };
-  }).sort((x, y) => {
+  });
+  // 内置系统位置牌（回收站等）——每次合并时追加，不受扫描缓存影响
+  for (const b of BUILTIN_APPS) {
+    const u = usage[b.name] || {};
+    if (!merged.some(a => a.name === b.name)) merged.push({ ...b, count: u.count || 0, last: u.last || 0 });
+  }
+  return merged.sort((x, y) => {
     // 常用优先：启动次数 desc → 最近使用 desc → 名称
     if (y.count !== x.count) return y.count - x.count;
     if (y.last !== x.last) return y.last - x.last;
@@ -190,7 +208,11 @@ async function launchApp(appInfo) {
   try {
     let via;
     const steamId = appInfo.exe ? steamAppIdFor(appInfo.exe) : null;
-    if (steamId) {
+    if (appInfo.exe && appInfo.exe.startsWith('shell:')) {
+      // shell 虚拟位置（回收站等）：start 解析 shell: URI（explorer.exe 直开会误报非零退出码）
+      await execAsync(`start "" "${appInfo.exe}"`, { shell: 'cmd.exe', windowsHide: true, timeout: 10 * 1000 });
+      via = 'shell';
+    } else if (steamId) {
       // Steam 游戏：协议启动（Steam 自动起）
       await execAsync(`start "" "steam://rungameid/${steamId}"`, { shell: 'cmd.exe', windowsHide: true, timeout: 10 * 1000 });
       via = 'steam:' + steamId;

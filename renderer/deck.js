@@ -28,7 +28,7 @@ const CATS = [
   { id: 'tool',    suit: '⭐', icon: '⭐', name: '效率工具',
     kw: ['压缩','zip','rar','7-zip','bandizip','下载','idm','thunder','迅雷','pdf','foxit','sumatra','office','word','excel','powerpoint','wps','notion','everything','listary','powertoys','traffic','fence','截图','snip','计算器','calculator','日历','calendar','weather','天气','ai','gpt','豆包','kimi','deepseek','塔罗','tarot','看板','dashboard','透明','todo','待办','笔记','note','翻译','translat','输入法','ime','键盘','keyboard','vocotype','ocr','clock','时钟','guardian','管家'] },
   { id: 'system',  suit: '⚙', icon: '⚙', name: '系统组件',
-    kw: ['driver','runtime','intel','nvidia','amd','realtek','sound','bluetooth','display','chipset','update','卸载','uninstall','visual','directx','opencl','openal','onedrive','xbox','sync','互联','share','host','provider','extension','identity','solitaire','recorder'] },
+    kw: ['driver','runtime','intel','nvidia','amd','realtek','sound','bluetooth','display','chipset','update','卸载','uninstall','visual','directx','opencl','openal','onedrive','xbox','sync','互联','share','host','provider','extension','identity','solitaire','recorder','回收站','recyclebin','trash'] },
 ];
 const CAT_MISC = { id: 'misc', suit: '✦', icon: '✦', name: '未名之牌' };
 
@@ -1275,7 +1275,7 @@ function checkWin() {
       <div class="ftitle">牌运亨通</div>
       <div class="ftext">${game.moveCount} 步清空牌阵——今日宜乘胜追击。</div>
       <div class="fmeta">— 空当接龙 · 应用牌堆 —</div>
-      <div class="fbtns"><button class="plain" data-act="new">再来一局</button><button data-act="back">回塔罗牌阵</button></div>`;
+      <div class="fbtns"><button class="plain" data-act="new">再来一局</button><button data-act="back">回应用牌阵</button></div>`;
     const pop = $('winPop');
     pop.classList.add('show');
     later(() => pop.classList.add('open'));
@@ -1452,8 +1452,8 @@ function setMode(m) {
   $('fcboard').classList.toggle('hidden', m !== 'game');
   $('gameBtns').style.display = m === 'game' ? 'flex' : 'none';
   $('btnMode').innerHTML = (m === 'game' ? IC.deck : IC.gamepad) +
-    '<span>' + (m === 'game' ? '塔罗牌阵' : '游戏模式') + '</span>';
-  $('modeTag').textContent = m === 'game' ? '· 空当接龙 · 纯游戏' : '· 塔罗牌阵';
+    '<span>' + (m === 'game' ? '应用牌阵' : '游戏模式') + '</span>';
+  $('modeTag').textContent = m === 'game' ? '· 空当接龙 · 纯游戏' : '· 应用牌阵';
   $('hint').textContent = m === 'game'
     ? '点牌选中 · 再点目标移动 · 红黑交替降序 · 回收位 A→K（游戏模式不启动应用）'
     : 'Ctrl+J 收起 · 右键卡片自定义归类 · 悬停看牌意 · 点击启动（也可拖牌到花色标签归类）';
