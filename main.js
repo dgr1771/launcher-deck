@@ -318,10 +318,22 @@ function buildTrayMenu() {
       buildTrayMenu();
     } },
     { type: 'separator' },
+    { label: '关于唤启', click: () => { showAbout(); } },
     { label: '退出', click: () => { app.quit(); } },
   ]);
   tray.setContextMenu(menu);
   tray.setToolTip(`唤启 · ${hotkey} 唤起`);
+}
+
+// 关于弹窗：唤起面板后由渲染层展示（与面板内 ⓘ 按钮同一弹窗）
+function showAbout() {
+  if (!panel || panel.isDestroyed()) return;
+  panel.show();
+  panel.focus();
+  if (panel.webContents) {
+    panel.webContents.send('deck:shown');
+    panel.webContents.send('deck:show-about');
+  }
 }
 
 // ---------- IPC ----------
@@ -357,6 +369,13 @@ ipcMain.handle('deck:set-hotkey', (_e, acc) => registerHotkey(acc));
 ipcMain.handle('deck:log', (_e, line) => { log('[renderer]', String(line).slice(0, 500)); });
 ipcMain.handle('deck:open-exe-dir', (_e, exePath) => {
   if (exePath) shell.showItemInFolder(exePath);
+});
+ipcMain.handle('deck:get-version', () => app.getVersion());
+ipcMain.handle('deck:open-external', (_e, url) => {
+  // 只放行自家仓库链接：渲染层协议跳转面收窄到 github.com/dgr1771
+  const u = String(url || '');
+  if (/^https:\/\/github\.com\/dgr1771\//.test(u)) shell.openExternal(u);
+  else log('[about] blocked external url:', u.slice(0, 120));
 });
 
 // ---------- 生命周期 ----------

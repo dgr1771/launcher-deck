@@ -648,6 +648,40 @@ function openThemeModal() {
   });
 }
 
+/** 关于弹层：版本 / 开发者 / 协议 / 仓库（与托盘菜单「关于唤启」同一入口） */
+async function openAboutModal() {
+  let modal = document.getElementById('aboutModal');
+  if (modal) modal.remove();
+  const ver = await window.deck.getVersion().catch(() => '');
+  modal = document.createElement('div');
+  modal.id = 'aboutModal';
+  modal.className = 'catmodal-pop';
+  modal.innerHTML = `
+    <div class="catmodal aboutmodal">
+      <div class="aboutmodal__star">✦</div>
+      <div class="aboutmodal__name">唤启 Launcher Deck</div>
+      <div class="aboutmodal__ver">${ver ? '版本 ' + ver : ''}</div>
+      <div class="aboutmodal__desc">所有应用，一屏全览，一唤即启。<br>开发者：<b>隔壁村布布</b></div>
+      <div class="aboutmodal__license">基于 CC BY-NC 4.0 协议授权（转载署名 · 商用需授权）</div>
+      <div class="catmodal__btns">
+        <button class="plain" data-act="repo">访问仓库</button>
+        <button data-act="ok">关 闭</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  later(() => modal.classList.add('open'));
+  Sound.flip();
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) { modal.remove(); return; }
+    const btn = e.target.closest('button');
+    if (btn && btn.dataset.act === 'repo') {
+      window.deck.openExternal('https://github.com/dgr1771/launcher-deck');
+      return;
+    }
+    if (btn && btn.dataset.act === 'ok') modal.remove();
+  });
+}
+
 // ---------- 全局快捷键自定义（⌨） ----------
 function updateHotkeyHint(hk) {
   if (!hk) return;
@@ -1560,6 +1594,8 @@ $('searchInput').addEventListener('input', (e) => renderSearch(e.target.value));
 $('btnTheme').addEventListener('click', openThemeModal);
 $('btnHotkey').addEventListener('click', openHotkeyModal);
 $('btnSound').addEventListener('click', (e) => { e.currentTarget.innerHTML = Sound.toggle() ? IC.volume : IC.mute; });
+$('btnAbout').addEventListener('click', openAboutModal);
+if (window.deck && window.deck.onShowAbout) window.deck.onShowAbout(openAboutModal);   // 托盘菜单「关于唤启」
 $('btnClose').addEventListener('click', () => window.deck.hide());
 
 // ---------- 全键盘导航：方向键选牌 · Enter 启动 · 鼠标移入即让位 ----------

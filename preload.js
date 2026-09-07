@@ -12,6 +12,9 @@ contextBridge.exposeInMainWorld('deck', {
   setHotkey: (acc) => ipcRenderer.invoke('deck:set-hotkey', acc),
   logError: (msg) => ipcRenderer.invoke('deck:log', msg),
   openExeDir: (exePath) => ipcRenderer.invoke('deck:open-exe-dir', exePath),
+  getVersion: () => ipcRenderer.invoke('deck:get-version'),
+  openExternal: (url) => ipcRenderer.invoke('deck:open-external', url),
   onAppsUpdated: (cb) => ipcRenderer.on('deck:apps-updated', () => cb()),
   onShown: (cb) => ipcRenderer.on('deck:shown', () => cb()),
+  onShowAbout: (cb) => ipcRenderer.on('deck:show-about', () => cb()),
 });
