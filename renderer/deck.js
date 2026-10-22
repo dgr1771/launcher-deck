@@ -475,9 +475,9 @@ function showUpgradeCenter() {
         row.classList.add('running'); row.classList.remove('done', 'fail');
         st.textContent = '升级中…';
         btn.textContent = `升级中 ${k + 1}/${rows.length}`;
-        const r = await window.deck.upgradeApp(u.id);
+        const r = await window.deck.upgradeApp({ id: u.id, exe: (DATA.find(x => matchUpdateByName(x, u)) || {}).exe || '' });
         row.classList.remove('running');
-        if (r && r.ok) { okN++; row.classList.add('done'); st.textContent = r.verified ? '✓（已复核）' : '✓'; }
+        if (r && r.ok) { okN++; row.classList.add('done'); st.textContent = r.autoClosed ? '✓ 已关自启' : (r.verified ? '✓（已复核）' : '✓'); }
         else {
           failN++; row.classList.add('fail'); st.textContent = '✗';
           row.title = (r && r.output) || '失败（应用运行中请先关闭）';
@@ -556,9 +556,9 @@ function showUpgradeModal(a, u) {
       btn.disabled = true;
       const logEl = modal.querySelector('.updmodal__log');
       logEl.textContent = '升级中…（UAC 弹窗请点「是」）';
-      const r = await window.deck.upgradeApp(u.id);
+      const r = await window.deck.upgradeApp({ id: u.id, exe: (DATA.find(x => matchUpdateByName(x, u)) || {}).exe || '' });
       if (r && r.ok) {
-        logEl.textContent = '✓ 升级完成';
+        logEl.textContent = '✓ 升级完成' + (r.autoClosed ? '（安装器自启的程序已自动关闭）' : '');
         Sound.land();
         toast(`「${escapeHTML(a.name)}」已升级到 v${escapeHTML(u.available)}`);
         setTimeout(() => { modal.remove(); refreshUpdates(true); }, 900);

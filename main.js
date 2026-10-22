@@ -432,14 +432,29 @@ ipcMain.handle('deck:check-updates', async (_e, force) => {
 ipcMain.handle('deck:upgrade-app', async (_e, payload) => {
   const id = String((payload && payload.id) || '');
   if (!/^[A-Za-z0-9._-]+$/.test(id)) return { ok: false, err: '非法包 id' };
-  log('winget upgrade start:', id);
+  // 自启进程回收：exe 名（来自应用扫描的启动目标）
+  const exePath = String((payload && payload.exe) || '');
+  const img = exePath ? path.basename(exePath) : '';
+  const isProcRunning = async (name) => {
+    try {
+      const r = await execAsync(`tasklist /FI "IMAGENAME eq ${name}" /NH`, { timeout: 20000, windowsHide: true, encoding: 'buffer' });
+      return (r.stdout || '').toString('utf8').toLowerCase().includes(name.toLowerCase());
+    } catch { return false; }
+  };
+  const killProc = async (name, force) => {
+    try { await execAsync(`taskkill ${force ? '/F ' : ''}/IM "${name}"`, { timeout: 20000, windowsHide: true, encoding: 'buffer' }); return true; }
+    catch { return false; }
+  };
+  let wasRunning = false;
+  if (img) wasRunning = await isProcRunning(img);
+  log('winget upgrade start:', id, img ? `(exe=${img}, wasRunning=${wasRunning})` : '');
   try {
     const r = await execAsync(
       `winget upgrade --id ${id} --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity`,
       { timeout: 1800000, windowsHide: true, encoding: 'buffer', maxBuffer: 16 * 1024 * 1024 });
     const out = ((r.stdout || '') + '\n' + (r.stderr || '')).toString('utf8');
     log('winget upgrade done:', id, 'code', r.code);
-    return { ok: r.code === 0, code: r.code, output: out.slice(-700) };
+    return { ok: r.code === 0, code: r.code, output: out.slice(-700), ...(await reapAutoLaunch(img, wasRunning, log)) };
   } catch (e) {
     const rawOut = String((e.stdout || '') + '\n' + (e.stderr || ''));
     // winget 退出码不可全信（下载波折也会非零，但安装可能已完成）：
@@ -452,13 +467,38 @@ ipcMain.handle('deck:upgrade-app', async (_e, payload) => {
       if (stillListed === false) {
         saveUpdatesCache({ ts: Date.now(), list: parseWingetUpgrade((v.stdout || '').toString('utf8')) });
         log('winget upgrade verify:', id, 'no longer listed → success');
-        return { ok: true, code: e.code, output: rawOut.slice(-300), verified: true };
+        return { ok: true, code: e.code, output: rawOut.slice(-300), verified: true, ...(await reapAutoLaunch(img, wasRunning, log)) };
       }
     } catch (e2) { log('winget verify fail:', e2 && e2.message); }
     log('winget upgrade fail:', id, 'code', e.code);
     return { ok: false, code: e.code, output: rawOut.slice(-700) };
   }
 });
+
+// 安装器自启的程序：升级前没在运行、装完冒出来的 → 温柔关，不听就强关
+async function reapAutoLaunch(img, wasRunning, log) {
+  if (!img || wasRunning) return {};
+  for (let t = 0; t < 4; t++) {
+    await new Promise(r2 => setTimeout(r2, 2000));
+    let running = false;
+    try {
+      const r = await execAsync(`tasklist /FI "IMAGENAME eq ${img}" /NH`, { timeout: 20000, windowsHide: true, encoding: 'buffer' });
+      running = (r.stdout || '').toString('utf8').toLowerCase().includes(img.toLowerCase());
+    } catch { break; }
+    if (!running) continue;      // 还没自启，再等等
+    await execAsync(`taskkill /IM "${img}"`, { timeout: 20000, windowsHide: true, encoding: 'buffer' }).catch(() => {});
+    await new Promise(r2 => setTimeout(r2, 1500));
+    let alive = true;
+    try {
+      const r = await execAsync(`tasklist /FI "IMAGENAME eq ${img}" /NH`, { timeout: 20000, windowsHide: true, encoding: 'buffer' });
+      alive = (r.stdout || '').toString('utf8').toLowerCase().includes(img.toLowerCase());
+    } catch {}
+    if (alive) await execAsync(`taskkill /F /IM "${img}"`, { timeout: 20000, windowsHide: true, encoding: 'buffer' }).catch(() => {});
+    log(`auto-launched ${img} closed after upgrade`);
+    return { autoClosed: true };
+  }
+  return {};
+}
 
 // ---------- 生命周期 ----------
 // 单实例锁：托盘常驻应用，二次启动（装完自动拉起/开始菜单误点两下）只唤起已有实例
