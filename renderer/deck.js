@@ -284,10 +284,12 @@ function tcardHTML(a, isTop) {
   const meta = [a.pub, a.ver && ('v' + a.ver), a.date].filter(Boolean).join(' · ');
   const badge = a.count > 0 ? `<div class="usebadge">★${a.count}</div>` : '';
   const customMark = custom ? `<div class="custombadge" title="自定义归类（拖到其它花色可改，拖到未名之牌恢复自动）">◈</div>` : '';
+  const upd = matchUpdate(a);
+  const updMark = upd ? `<div class="updbadge" title="可升级：${escapeHTML(upd.name)} ${escapeHTML(upd.version)} → ${escapeHTML(upd.available)}（右键升级）">⬆</div>` : '';
   const pinned = isPinned(a.name);
   return `
   <div class="tcard${custom ? ' tcard--custom' : ''}${isTop ? ' tcard--top' : ''}${pinned ? ' tcard--pinned' : ''}" draggable="true" data-name="${escapeHTML(a.name)}">
-    ${badge}${customMark}${pinned ? '<div class="pinbadge" title="已置顶（右键可取消）">📌</div>' : ''}
+    ${badge}${customMark}${updMark}${pinned ? '<div class="pinbadge" title="已置顶（右键可取消）">📌</div>' : ''}
     <div class="lift">
       <div class="inner">
         <div class="face back" data-suit="${c.suit}">
@@ -354,6 +356,100 @@ function hideReading() {
   }
 }
 
+// ---------- 应用升级检测（winget 数据源） ----------
+let UPD = { list: [], byKey: new Map(), ts: 0, checked: false };
+let updSkip = (() => { try { return new Set(JSON.parse(localStorage.getItem('ld_upd_skip') || '[]')); } catch { return new Set(); } })();
+let updChecking = false;
+
+function normApp(s) {
+  return String(s || '').toLowerCase()
+    .replace(/\((x64|x86|arm64)\)/g, '')
+    .replace(/[\s._\-()（）]/g, '')
+    .replace(/v?\d+(\.\d+)+/g, '');   // 去内嵌版本号
+}
+function matchUpdate(a) {
+  if (!UPD.list.length) return null;
+  const na = normApp(a.name);
+  if (na.length < 3) return null;
+  for (const u of UPD.list) {
+    if (updSkip.has(u.id)) continue;
+    const nu = normApp(u.name);
+    if (nu.length < 3) continue;
+    if (na === nu) return u;
+    // 子串匹配收紧：短名（如 winget 的 "Git"）不能碰瓷长名（如 "GitHub Desktop"）
+    if (nu.length >= 5 && (na.includes(nu) || nu.includes(na)) && Math.min(na.length, nu.length) >= nu.length * 0.6) return u;
+  }
+  return null;
+}
+async function refreshUpdates(force) {
+  if (updChecking || !window.deck.checkUpdates) return;
+  updChecking = true;
+  try {
+    const r = await window.deck.checkUpdates(!!force);
+    const prevCount = UPD.list.filter(u => !updSkip.has(u.id)).length;
+    UPD.list = (r && r.list) || [];
+    UPD.ts = Date.now(); UPD.checked = true;
+    const cnt = UPD.list.filter(u => !updSkip.has(u.id)).length;
+    renderTarot(false);
+    if (force && r.ok && cnt > 0) toast(`⬆ ${cnt} 个应用可升级（红点标记）`);
+    else if (force && r.ok && cnt === 0) toast('应用都是最新版 ✓');
+    else if (!r.ok && force) toast('升级检查失败：' + (r.err || 'winget 不可用'));
+    if (r.ok && !force && cnt > prevCount && cnt > 0) toast(`⬆ ${cnt} 个应用可升级（红点标记）`);
+  } finally { updChecking = false; }
+}
+function showUpgradeModal(a, u) {
+  let modal = document.getElementById('updModal');
+  if (modal) modal.remove();
+  modal = document.createElement('div');
+  modal.id = 'updModal';
+  modal.className = 'catmodal-pop';
+  modal.innerHTML = `
+    <div class="catmodal updmodal">
+      <div class="catmodal__title">⬆ 升级「${escapeHTML(a.name)}」</div>
+      <div class="updmodal__vers"><s>v${escapeHTML(u.version)}</s> → <b>v${escapeHTML(u.available)}</b></div>
+      <div class="catmodal__hint">来源 winget · 静默升级，不启动应用<br>系统级安装会弹一次 UAC 授权，请点「是」</div>
+      <div class="updmodal__log"></div>
+      <div class="catmodal__btns">
+        <button class="plain" data-act="skip">忽略此版本</button>
+        <button data-act="go">开始升级</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  later(() => modal.classList.add('open'));
+  Sound.flip();
+  modal.addEventListener('click', async (e) => {
+    if (e.target === modal) { modal.remove(); return; }
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    if (btn.dataset.act === 'skip') {
+      updSkip.add(u.id);
+      localStorage.setItem('ld_upd_skip', JSON.stringify([...updSkip]));
+      modal.remove(); renderTarot(false);
+      toast(`已忽略「${escapeHTML(a.name)}」的本次更新`);
+      return;
+    }
+    if (btn.dataset.act === 'go') {
+      btn.disabled = true;
+      const logEl = modal.querySelector('.updmodal__log');
+      logEl.textContent = '升级中…（UAC 弹窗请点「是」）';
+      const r = await window.deck.upgradeApp(u.id);
+      if (r && r.ok) {
+        logEl.textContent = '✓ 升级完成';
+        Sound.land();
+        toast(`「${escapeHTML(a.name)}」已升级到 v${escapeHTML(u.available)}`);
+        setTimeout(() => { modal.remove(); refreshUpdates(true); }, 900);
+      } else {
+        logEl.textContent = '✗ 未完成（退出码 ' + (r && r.code) + '）——应用在运行时请先关掉再试；详见下方';
+        const pre = document.createElement('pre');
+        pre.className = 'updmodal__tail';
+        pre.textContent = (r && r.output) || '';
+        modal.querySelector('.updmodal__log').after(pre);
+        btn.disabled = false; btn.textContent = '重试升级';
+      }
+    }
+  });
+}
+
 // ---------- 右键归类菜单（显式入口） ----------
 let ctxMenu = null;
 
@@ -367,11 +463,13 @@ function showCatMenu(a, x, y) {
   ctxMenu.className = 'ctxmenu';
   const cur = catOf(a).id;
   const custom = !!getCustomCats()[a.name];
+  const upd = matchUpdate(a);
   const items = [
     ...allCats().map(c => ({ id: c.id, icon: c.icon, name: c.id === 'misc' ? '未名之牌（恢复自动）' : c.name })),
   ];
   ctxMenu.innerHTML = `
     <div class="ctxmenu__title">「${escapeHTML(a.name)}」归类到</div>
+    ${upd ? `<div class="ctxmenu__item upd" data-act="upgrade">⬆ 升级到 v${escapeHTML(upd.available)}（当前 v${escapeHTML(upd.version)}）</div><div class="ctxmenu__sep"></div>` : ''}
     <div class="ctxmenu__item" data-act="pin">${isPinned(a.name) ? '📌 取消置顶' : '📌 置顶到常用区'}</div>
     <div class="ctxmenu__sep"></div>
     ${items.map(it => `
@@ -404,6 +502,12 @@ function showCatMenu(a, x, y) {
         : `「${escapeHTML(a.name)}」已取消置顶`);
       closeCatMenu();
       renderTarot(false);
+      return;
+    }
+    if (it.dataset.act === 'upgrade') {
+      const u = matchUpdate(a);
+      closeCatMenu();
+      if (u) showUpgradeModal(a, u);
       return;
     }
     if (it.dataset.act === 'launch') {
@@ -1743,5 +1847,7 @@ async function loadApps() {
   await loadApps();
   window.deck.onShown(() => { layoutAll(); loadApps(); });
   window.deck.onAppsUpdated(() => loadApps());
+  window.deck.onUpdatesRefresh(() => refreshUpdates(true));
   try { updateHotkeyHint(await window.deck.getHotkey()); } catch (e) {}
+  refreshUpdates(false);   // 启动即查（6h 缓存在主进程，未过期时瞬时返回）
 })();

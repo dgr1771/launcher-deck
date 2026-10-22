@@ -312,6 +312,11 @@ function buildTrayMenu() {
   const menu = Menu.buildFromTemplate([
     { label: `展开应用一屏（${hotkey}）`, click: () => togglePanel() },
     { label: '重新扫描本机应用', click: async () => { await refreshScan(); if (panel) panel.webContents.send('deck:apps-updated'); } },
+    { label: '检查应用升级', click: async () => {
+      if (panel && panel.isDestroyed()) return;
+      panel.show(); panel.focus();
+      panel.webContents.send('deck:updates-refresh');   // 渲染层收到后 force 检查并弹提示
+    } },
     { label: (app.getLoginItemSettings().openAtLogin ? '✓ ' : '') + '开机自启', click: () => {
       const on = !app.getLoginItemSettings().openAtLogin;
       try { app.setLoginItemSettings({ openAtLogin: on }); } catch (e) { log('login-item fail', e && e.message); }
@@ -376,6 +381,70 @@ ipcMain.handle('deck:open-external', (_e, url) => {
   const u = String(url || '');
   if (/^https:\/\/github\.com\/dgr1771\//.test(u)) shell.openExternal(u);
   else log('[about] blocked external url:', u.slice(0, 120));
+});
+
+// ---------- 应用升级检测（winget）----------
+// Windows 软件更新源是碎片化的（各家自带升级器 + UAC + 文件锁），没有统一通道；
+// winget 是微软官方聚合器：扫注册表卸载项 → 对照社区清单报"谁有新版本"，
+// 且支持 --silent 静默升级。唤启以它为升级数据源与执行器。
+const UPDATES_FILE = path.join(userDataDir, 'updates.json');
+function loadUpdatesCache() {
+  try { const c = JSON.parse(fs.readFileSync(UPDATES_FILE, 'utf8')); return (c && Array.isArray(c.list)) ? c : { ts: 0, list: [] }; }
+  catch { return { ts: 0, list: [] }; }
+}
+function saveUpdatesCache(c) { try { fs.writeFileSync(UPDATES_FILE, JSON.stringify(c)); } catch (e) { log('updates save fail', e && e.message); } }
+
+function parseWingetUpgrade(out) {
+  // 行形如：Name(<2空格分隔，可含空格/版本>)  Id(无空格)  Version  Available  Source
+  const list = [];
+  const re = /^(.+?)\s{2,}([A-Za-z0-9._-]+)\s{2,}(\d[^\s]*)\s{2,}(\d[^\s]*)\s+(\S+)\s*$/;
+  for (const raw of out.split(/\r?\n/)) {
+    const m = raw.match(re);
+    if (!m || /^-+$/.test(m[1])) continue;
+    list.push({ name: m[1].trim(), id: m[2], version: m[3], available: m[4], source: m[5] });
+  }
+  return list;
+}
+
+async function checkWingetUpgrades(force) {
+  const now = Date.now();
+  if (!force) {
+    const c = loadUpdatesCache();
+    if (c.ts && now - c.ts < 6 * 3600 * 1000) return c.list;   // 6 小时缓存
+  }
+  const r = await execAsync('winget upgrade --disable-interactivity --accept-source-agreements',
+    { timeout: 180000, windowsHide: true, encoding: 'buffer', maxBuffer: 8 * 1024 * 1024 });
+  const list = parseWingetUpgrade((r.stdout || '').toString('utf8'));
+  saveUpdatesCache({ ts: now, list });
+  log(`winget upgrade: ${list.length} apps`);
+  return list;
+}
+
+ipcMain.handle('deck:check-updates', async (_e, force) => {
+  try {
+    const list = await checkWingetUpgrades(!!force);
+    return { ok: true, list };
+  } catch (e) {
+    return { ok: false, err: String((e && e.message) || e).slice(0, 160), list: loadUpdatesCache().list };
+  }
+});
+
+ipcMain.handle('deck:upgrade-app', async (_e, payload) => {
+  const id = String((payload && payload.id) || '');
+  if (!/^[A-Za-z0-9._-]+$/.test(id)) return { ok: false, err: '非法包 id' };
+  log('winget upgrade start:', id);
+  try {
+    const r = await execAsync(
+      `winget upgrade --id ${id} --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity`,
+      { timeout: 1800000, windowsHide: true, encoding: 'buffer', maxBuffer: 16 * 1024 * 1024 });
+    const out = ((r.stdout || '') + '\n' + (r.stderr || '')).toString('utf8');
+    log('winget upgrade done:', id, 'code', r.code);
+    return { ok: r.code === 0, code: r.code, output: out.slice(-700) };
+  } catch (e) {
+    const out = String((e.stdout || '') + '\n' + (e.stderr || '')).slice(-700);
+    log('winget upgrade fail:', id, 'code', e.code);
+    return { ok: false, code: e.code, output: out };
+  }
 });
 
 // ---------- 生命周期 ----------
