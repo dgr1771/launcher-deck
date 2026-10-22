@@ -584,3 +584,39 @@ html, body {
   font-family: Consolas, monospace; font-size: 11px; color: #ff9b9b; white-space: pre-wrap; word-break: break-all;
 }
 .ctxmenu__item.upd { color: #ffd782; font-weight: 700; }
+
+/* ---------- 升级中心（批量升级区域） ---------- */
+.updcount {
+  position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 9px; background: #e5484d; color: #fff; font-size: 10.5px; font-weight: 700;
+  line-height: 17px; text-align: center; box-shadow: 0 1px 6px rgba(229,72,77,.55);
+}
+.updcenter { width: min(560px, 92vw); }
+.updcenter__n { font-size: 12px; color: #ff8a8e; font-weight: 600; margin-left: 6px; }
+.updcenter__list {
+  width: 100%; max-height: 46vh; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;
+  scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.18) transparent;
+}
+.updcenter__row {
+  display: flex; align-items: center; gap: 10px; padding: 7px 9px; border-radius: 9px;
+  cursor: pointer; font-size: 13px; color: #e8eaf0;
+}
+.updcenter__row:hover { background: rgba(255,255,255,.05); }
+.updcenter__row.running { background: rgba(88,101,242,.14); }
+.updcenter__row.done { opacity: .55; }
+.updcenter__row.done .updcenter__st { color: #4ade80; font-weight: 700; }
+.updcenter__row.fail .updcenter__st { color: #ff7b81; font-weight: 700; cursor: help; }
+.updcenter__row input[type=checkbox] { accent-color: var(--gold, #f0b232); width: 15px; height: 15px; flex: none; }
+.updcenter__icon { width: 26px; height: 26px; border-radius: 6px; object-fit: contain; background: rgba(255,255,255,.06); flex: none; }
+.updcenter__icon--fb {
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; font-size: 13px; background: rgba(255,255,255,.12);
+}
+.updcenter__name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.updcenter__ver { color: rgba(244,246,251,.55); font-size: 12px; white-space: nowrap; }
+.updcenter__ver b { color: var(--gold, #f0b232); font-size: 12.5px; }
+.updcenter__st { min-width: 52px; text-align: right; font-size: 12px; color: rgba(244,246,251,.6); }
+.updcenter__bar { display: flex; align-items: center; justify-content: space-between; width: 100%; font-size: 12.5px; }
+.updcenter__all { display: flex; align-items: center; gap: 6px; cursor: pointer; color: rgba(244,246,251,.85); }
+.updcenter__all input { accent-color: var(--gold, #f0b232); }
+.updcenter__hint { color: rgba(244,246,251,.4); font-size: 11.5px; }

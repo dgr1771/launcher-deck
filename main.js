@@ -441,9 +441,22 @@ ipcMain.handle('deck:upgrade-app', async (_e, payload) => {
     log('winget upgrade done:', id, 'code', r.code);
     return { ok: r.code === 0, code: r.code, output: out.slice(-700) };
   } catch (e) {
-    const out = String((e.stdout || '') + '\n' + (e.stderr || '')).slice(-700);
+    const rawOut = String((e.stdout || '') + '\n' + (e.stderr || ''));
+    // winget 退出码不可全信（下载波折也会非零，但安装可能已完成）：
+    // 失败时重查升级清单——该 id 不在列表 = 实际已升级成功
+    let stillListed = null;
+    try {
+      const v = await execAsync('winget upgrade --disable-interactivity --accept-source-agreements',
+        { timeout: 180000, windowsHide: true, encoding: 'buffer', maxBuffer: 8 * 1024 * 1024 });
+      stillListed = parseWingetUpgrade((v.stdout || '').toString('utf8')).some(u => u.id === id);
+      if (stillListed === false) {
+        saveUpdatesCache({ ts: Date.now(), list: parseWingetUpgrade((v.stdout || '').toString('utf8')) });
+        log('winget upgrade verify:', id, 'no longer listed → success');
+        return { ok: true, code: e.code, output: rawOut.slice(-300), verified: true };
+      }
+    } catch (e2) { log('winget verify fail:', e2 && e2.message); }
     log('winget upgrade fail:', id, 'code', e.code);
-    return { ok: false, code: e.code, output: out };
+    return { ok: false, code: e.code, output: rawOut.slice(-700) };
   }
 });
 

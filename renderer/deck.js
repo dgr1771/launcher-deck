@@ -391,11 +391,135 @@ async function refreshUpdates(force) {
     UPD.ts = Date.now(); UPD.checked = true;
     const cnt = UPD.list.filter(u => !updSkip.has(u.id)).length;
     renderTarot(false);
+    updateUpdButton();
     if (force && r.ok && cnt > 0) toast(`⬆ ${cnt} 个应用可升级（红点标记）`);
     else if (force && r.ok && cnt === 0) toast('应用都是最新版 ✓');
     else if (!r.ok && force) toast('升级检查失败：' + (r.err || 'winget 不可用'));
     if (r.ok && !force && cnt > prevCount && cnt > 0) toast(`⬆ ${cnt} 个应用可升级（红点标记）`);
   } finally { updChecking = false; }
+}
+function updPendingList() { return UPD.list.filter(u => !updSkip.has(u.id)); }
+function updateUpdButton() {
+  const b = document.getElementById('btnUpd');
+  if (!b) return;
+  const n = updPendingList().length;
+  b.style.display = n > 0 ? '' : 'none';
+  const c = document.getElementById('updCountN');
+  if (c) c.textContent = n > 99 ? '99+' : n;
+}
+
+// ---- 升级中心：列表 + 勾选 + 一键批量升级（顺序执行，winget 同时只能跑一个安装）----
+let updBatchRunning = false;
+function showUpgradeCenter() {
+  if (updBatchRunning) return;
+  const list = updPendingList();
+  if (!list.length) { toast('应用都是最新版 ✓'); return; }
+  let modal = document.getElementById('updCenter');
+  if (modal) modal.remove();
+  modal = document.createElement('div');
+  modal.id = 'updCenter';
+  modal.className = 'catmodal-pop';
+  modal.innerHTML = `
+    <div class="catmodal updcenter">
+      <div class="catmodal__title">⬆ 应用升级中心 <span class="updcenter__n">${list.length} 个可升级</span></div>
+      <div class="updcenter__list" id="updList">
+        ${list.map((u, i) => {
+          const a = DATA.find(x => matchUpdateByName(x, u));
+          const icon = a && a.icon ? `<img class="updcenter__icon" src="${a.icon}">` : `<div class="updcenter__icon updcenter__icon--fb">${escapeHTML((u.name||'?').charAt(0))}</div>`;
+          return `<label class="updcenter__row" data-i="${i}">
+            <input type="checkbox" checked data-i="${i}">
+            ${icon}
+            <span class="updcenter__name" title="${escapeHTML(u.name)}">${escapeHTML(u.name)}</span>
+            <span class="updcenter__ver">${escapeHTML(u.version)} → <b>${escapeHTML(u.available)}</b></span>
+            <span class="updcenter__st" data-i="${i}"></span>
+          </label>`;
+        }).join('')}
+      </div>
+      <div class="updcenter__bar">
+        <label class="updcenter__all"><input type="checkbox" id="updAll" checked> 全选</label>
+        <span class="updcenter__hint">静默升级 · 系统级安装会弹 UAC 请点「是」</span>
+      </div>
+      <div class="catmodal__btns">
+        <button class="plain" data-act="close">关 闭</button>
+        <button data-act="go" id="updGo">一键升级所选 (<span id="updSelN">${list.length}</span>)</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  later(() => modal.classList.add('open'));
+  Sound.flip();
+
+  const boxes = () => [...modal.querySelectorAll('.updcenter__row input[type=checkbox]')];
+  const syncN = () => { modal.querySelector('#updSelN').textContent = boxes().filter(b => b.checked).length; };
+  modal.addEventListener('change', (e) => {
+    if (e.target.id === 'updAll') boxes().forEach(b => { b.checked = e.target.checked; });
+    syncN();
+  });
+  modal.addEventListener('click', async (e) => {
+    if (e.target === modal) return;   // 批量中不允许误关
+    const btn = e.target.closest('button');
+    if (!btn || updBatchRunning) return;
+    if (btn.dataset.act === 'close') { modal.remove(); return; }
+    if (btn.dataset.act === 'go') {
+      const rows = [...modal.querySelectorAll('.updcenter__row')].filter(r => r.querySelector('input').checked);
+      if (!rows.length) return;
+      updBatchRunning = true;
+      modal.querySelector('#updAll').disabled = true;
+      boxes().forEach(b => b.disabled = true);
+      btn.disabled = true; btn.textContent = `升级中 0/${rows.length}`;
+      let okN = 0, failN = 0;
+      for (let k = 0; k < rows.length; k++) {
+        const row = rows[k];
+        const i = +row.dataset.i;
+        const u = list[i];
+        const st = row.querySelector('.updcenter__st');
+        row.classList.add('running'); row.classList.remove('done', 'fail');
+        st.textContent = '升级中…';
+        btn.textContent = `升级中 ${k + 1}/${rows.length}`;
+        const r = await window.deck.upgradeApp(u.id);
+        row.classList.remove('running');
+        if (r && r.ok) { okN++; row.classList.add('done'); st.textContent = r.verified ? '✓（已复核）' : '✓'; }
+        else {
+          failN++; row.classList.add('fail'); st.textContent = '✗';
+          row.title = (r && r.output) || '失败（应用运行中请先关闭）';
+          row.querySelector('input').checked = true;   // 失败项保持勾选便于重试
+        }
+      }
+      updBatchRunning = false;
+      if (!failN) {
+        btn.textContent = `完成：${okN} 成功 ✓`;
+        Sound.land();
+        toast(`全部升级完成 ✓（${okN} 个）`);
+        await refreshUpdates(true);
+        updateUpdButton();
+        setTimeout(() => { const m = document.getElementById('updCenter'); if (m) m.remove(); }, 1100);
+      } else {
+        // 失败项保持勾选，按钮文案变重试（act 仍是 go，点即重跑勾选行）
+        btn.textContent = `重试失败项（${failN}）`;
+        toast(`升级完成：${okN} 成功，${failN} 失败（✗ 悬停看原因）`);
+        await refreshUpdates(true);
+        updateUpdButton();
+        // 清单里已消失的失败项（实际成功被误判的）从列表移除
+        modal.querySelectorAll('.updcenter__row').forEach(row => {
+          const u = list[+row.dataset.i];
+          if (row.classList.contains('fail') && !UPD.list.some(x => x.id === u.id)) {
+            row.classList.remove('fail'); row.classList.add('done');
+            row.querySelector('.updcenter__st').textContent = '✓（已复核）';
+          }
+        });
+      }
+    }
+    if (btn.dataset.act === 'retry') {
+      // 重试 = 未打✓的行重新升级
+      modal.querySelector('[data-act="go"]')?.click();
+    }
+  });
+}
+function matchUpdateByName(a, u) {
+  const na = normApp(a.name), nu = normApp(u.name);
+  if (na.length < 3 || nu.length < 3) return null;
+  if (na === nu) return u;
+  if (nu.length >= 5 && (na.includes(nu) || nu.includes(na)) && Math.min(na.length, nu.length) >= nu.length * 0.6) return u;
+  return null;
 }
 function showUpgradeModal(a, u) {
   let modal = document.getElementById('updModal');
@@ -931,6 +1055,9 @@ function renderTarot(deal) {
       hideReading();
       showCatMenu(a, e.clientX, e.clientY);
     });
+    // 红点 = 打开升级中心（阻止冒泡到卡片启动）
+    const ub = card.querySelector('.updbadge');
+    if (ub) ub.addEventListener('click', (e) => { e.stopPropagation(); hideReading(); showUpgradeCenter(); });
     // 拖拽归类：拖到花色标签上松手即归类
     card.addEventListener('dragstart', (e) => {
       card.dataset.dragging = '1';
@@ -1699,6 +1826,7 @@ $('btnTheme').addEventListener('click', openThemeModal);
 $('btnHotkey').addEventListener('click', openHotkeyModal);
 $('btnSound').addEventListener('click', (e) => { e.currentTarget.innerHTML = Sound.toggle() ? IC.volume : IC.mute; });
 $('btnAbout').addEventListener('click', openAboutModal);
+$('btnUpd').addEventListener('click', showUpgradeCenter);
 if (window.deck && window.deck.onShowAbout) window.deck.onShowAbout(openAboutModal);   // 托盘菜单「关于唤启」
 $('btnClose').addEventListener('click', () => window.deck.hide());
 
