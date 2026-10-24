@@ -394,6 +394,81 @@ function loadUpdatesCache() {
 }
 function saveUpdatesCache(c) { try { fs.writeFileSync(UPDATES_FILE, JSON.stringify(c)); } catch (e) { log('updates save fail', e && e.message); } }
 
+// ---------- 失败分级：识别 winget 静默通道"永远升不动"的应用 ----------
+// 部分退出码是死路（安装器不支持就地升级/版本通道不匹配）或必须提权，
+// 这类应用反复放进一键列表只会反复失败。同一应用同码连败 ≥2 次自动降级为"仅提醒"，
+// 一键升级只保留真正升得动的，成功率接近 100%。
+const FAILS_FILE = path.join(userDataDir, 'update-fails.json');
+function loadFails() {
+  try { const c = JSON.parse(fs.readFileSync(FAILS_FILE, 'utf8')); return (c && typeof c === 'object') ? c : {}; }
+  catch { return {}; }
+}
+function saveFails(c) { try { fs.writeFileSync(FAILS_FILE, JSON.stringify(c)); } catch (e) { log('fails save fail', e && e.message); } }
+
+// 退出码 → 分级（十进制）。kind: dead=静默通道永远升不了 admin=要管理员提权 net=网络抖动可重试
+const WINGET_ERR = {
+  2316632340: { kind: 'dead',  reason: '安装器不支持静默就地升级', hint: '请打开该应用，在其设置或官网下载页内更新' },
+  2316632107: { kind: 'dead',  reason: '版本通道不匹配（如测试版 → 正式版）', hint: '请在应用内更新，或卸载后重装正式版' },
+  2147958056: { kind: 'admin', reason: '需要管理员权限', hint: '点击「以管理员升级」，在 UAC 弹窗点「是」' },
+  2147954429: { kind: 'net',   reason: '无法连接升级源', hint: '多为网络波动，稍后重试即可' },
+  2147954402: { kind: 'net',   reason: '连接升级源超时', hint: '多为网络波动，稍后重试即可' },
+  2316632206: { kind: 'net',   reason: '升级源连接失败', hint: '多为网络波动，稍后重试即可' },
+  2316632070: { kind: 'net',   reason: '升级源通信失败', hint: '多为网络波动，稍后重试即可' },
+};
+
+function annotateUpgrades(list) {
+  const fails = loadFails();
+  return list.map(u => {
+    const f = fails[u.id];
+    const cls = f ? WINGET_ERR[f.code] : null;
+    if (!cls) return u;
+    if (cls.kind === 'net') return { ...u, hint: cls.hint };              // 网络抖动：提示但不降级，保持可勾选重试
+    if (!f.count || f.count < 2) return u;                                // 死路/提权：连败 2 次才降级，避免误伤
+    return { ...u, grade: cls.kind, reason: cls.reason, hint: cls.hint }; // dead/admin → 仅提醒
+  });
+}
+
+function recordUpgradeFail(id, code) {
+  if (typeof code !== 'number') return;
+  const fails = loadFails();
+  const prev = fails[id];
+  fails[id] = (prev && prev.code === code) ? { code, count: prev.count + 1, ts: Date.now() } : { code, count: 1, ts: Date.now() };
+  saveFails(fails);
+}
+function clearUpgradeFail(id) {
+  const fails = loadFails();
+  if (fails[id]) { delete fails[id]; saveFails(fails); }
+}
+
+// 一次性预热：从 main.log 历史"fail/done/verify"记录重建连败计数，装机即分级生效
+;(function seedFailsFromLog() {
+  try {
+    const fails = loadFails();
+    if (fails.seeded) return;
+    const cnt = {};
+    const logPath = path.join(userDataDir, 'main.log');
+    if (fs.existsSync(logPath)) {
+      for (const line of fs.readFileSync(logPath, 'utf8').split(/\r?\n/)) {
+        let m = line.match(/winget upgrade fail: ([A-Za-z0-9._-]+) code (\d+)/);
+        if (m) {
+          const c = cnt[m[1]] = cnt[m[1]] || { code: +m[2], count: 0 };
+          if (c.code === +m[2]) c.count += 1; else { c.code = +m[2]; c.count = 1; }
+          continue;
+        }
+        m = line.match(/winget upgrade done: ([A-Za-z0-9._-]+)/) ||
+            line.match(/winget upgrade verify: ([A-Za-z0-9._-]+) no longer listed/);
+        if (m) cnt[m[1]] = { code: 0, count: 0 };   // 成功即清零连败
+      }
+    }
+    for (const [id, c] of Object.entries(cnt)) {
+      if (c.code && c.count >= 2) fails[id] = { code: c.code, count: c.count, ts: Date.now() };
+    }
+    fails.seeded = true;
+    saveFails(fails);
+    log('fails seeded:', Object.keys(fails).filter(k => k !== 'seeded').join(',') || '(none)');
+  } catch (e) { log('seedFails fail', e && e.message); }
+})();
+
 function parseWingetUpgrade(out) {
   // 行形如：Name(<2空格分隔，可含空格/版本>)  Id(无空格)  Version  Available  Source
   const list = [];
@@ -410,14 +485,14 @@ async function checkWingetUpgrades(force) {
   const now = Date.now();
   if (!force) {
     const c = loadUpdatesCache();
-    if (c.ts && now - c.ts < 6 * 3600 * 1000) return c.list;   // 6 小时缓存
+    if (c.ts && now - c.ts < 6 * 3600 * 1000) return annotateUpgrades(c.list);   // 6 小时缓存（存原始清单，出口统一标注）
   }
   const r = await execAsync('winget upgrade --disable-interactivity --accept-source-agreements',
     { timeout: 180000, windowsHide: true, encoding: 'buffer', maxBuffer: 8 * 1024 * 1024 });
-  const list = parseWingetUpgrade((r.stdout || '').toString('utf8'));
-  saveUpdatesCache({ ts: now, list });
-  log(`winget upgrade: ${list.length} apps`);
-  return list;
+  const raw = parseWingetUpgrade((r.stdout || '').toString('utf8'));
+  saveUpdatesCache({ ts: now, list: raw });
+  log(`winget upgrade: ${raw.length} apps`);
+  return annotateUpgrades(raw);
 }
 
 ipcMain.handle('deck:check-updates', async (_e, force) => {
@@ -454,6 +529,7 @@ ipcMain.handle('deck:upgrade-app', async (_e, payload) => {
       { timeout: 1800000, windowsHide: true, encoding: 'buffer', maxBuffer: 16 * 1024 * 1024 });
     const out = ((r.stdout || '') + '\n' + (r.stderr || '')).toString('utf8');
     log('winget upgrade done:', id, 'code', r.code);
+    if (r.code === 0) clearUpgradeFail(id);
     return { ok: r.code === 0, code: r.code, output: out.slice(-700), ...(await reapAutoLaunch(img, wasRunning, log)) };
   } catch (e) {
     const rawOut = String((e.stdout || '') + '\n' + (e.stderr || ''));
@@ -466,12 +542,39 @@ ipcMain.handle('deck:upgrade-app', async (_e, payload) => {
       stillListed = parseWingetUpgrade((v.stdout || '').toString('utf8')).some(u => u.id === id);
       if (stillListed === false) {
         saveUpdatesCache({ ts: Date.now(), list: parseWingetUpgrade((v.stdout || '').toString('utf8')) });
+        clearUpgradeFail(id);
         log('winget upgrade verify:', id, 'no longer listed → success');
         return { ok: true, code: e.code, output: rawOut.slice(-300), verified: true, ...(await reapAutoLaunch(img, wasRunning, log)) };
       }
     } catch (e2) { log('winget verify fail:', e2 && e2.message); }
+    recordUpgradeFail(id, e.code);
     log('winget upgrade fail:', id, 'code', e.code);
     return { ok: false, code: e.code, output: rawOut.slice(-700) };
+  }
+});
+
+// 管理员通道：MSIX/系统组件（如 WSL）静默通道升不了，winget 又不触发 UAC——
+// 经 PowerShell Start-Process -Verb RunAs 提权执行并等结束，UAC 由用户确认一次
+ipcMain.handle('deck:upgrade-app-admin', async (_e, payload) => {
+  const id = String((payload && payload.id) || '');
+  if (!/^[A-Za-z0-9._-]+$/.test(id)) return { ok: false, err: '非法包 id' };
+  log('winget upgrade (admin) start:', id);
+  const args = ['upgrade', '--id', id, '--exact', '--silent',
+    '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity'];
+  const psList = args.map(a => `'${a.replace(/'/g, "''")}'`).join(',');
+  try {
+    const r = await execAsync(
+      `powershell -NoProfile -Command "$p = Start-Process winget -ArgumentList ${psList} -Verb RunAs -Wait -PassThru; exit $p.ExitCode"`,
+      { timeout: 1800000, windowsHide: true, encoding: 'buffer', maxBuffer: 4 * 1024 * 1024 });
+    log('winget upgrade (admin) done:', id, 'code', r.code);
+    if (r.code === 0) clearUpgradeFail(id);
+    return { ok: r.code === 0, code: r.code };
+  } catch (e) {
+    const rawOut = String((e.stdout || '') + '\n' + (e.stderr || ''));
+    if (/canceled by the user|1223/i.test(rawOut)) return { ok: false, canceled: true };   // 用户在 UAC 点了「否」
+    if (typeof e.code === 'number') recordUpgradeFail(id, e.code);
+    log('winget upgrade (admin) fail:', id, 'code', e.code);
+    return { ok: false, code: e.code, output: rawOut.slice(-500) };
   }
 });
 

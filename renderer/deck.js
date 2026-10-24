@@ -285,7 +285,7 @@ function tcardHTML(a, isTop) {
   const badge = a.count > 0 ? `<div class="usebadge">★${a.count}</div>` : '';
   const customMark = custom ? `<div class="custombadge" title="自定义归类（拖到其它花色可改，拖到未名之牌恢复自动）">◈</div>` : '';
   const upd = matchUpdate(a);
-  const updMark = upd ? `<div class="updbadge" title="可升级：${escapeHTML(upd.name)} ${escapeHTML(upd.version)} → ${escapeHTML(upd.available)}（右键升级）">⬆</div>` : '';
+  const updMark = upd ? `<div class="updbadge${upd.grade ? ' updbadge--remind' : ''}" title="可升级：${escapeHTML(upd.name)} ${escapeHTML(upd.version)} → ${escapeHTML(upd.available)}${upd.grade ? '；' + escapeHTML(upd.reason) : ''}（点击打开升级中心）">⬆</div>` : '';
   const pinned = isPinned(a.name);
   return `
   <div class="tcard${custom ? ' tcard--custom' : ''}${isTop ? ' tcard--top' : ''}${pinned ? ' tcard--pinned' : ''}" draggable="true" data-name="${escapeHTML(a.name)}">
@@ -413,43 +413,60 @@ let updBatchRunning = false;
 function showUpgradeCenter() {
   if (updBatchRunning) return;
   const list = updPendingList();
+  const act = list.filter(u => !u.grade);      // 可一键静默升级
+  const remind = list.filter(u => u.grade);    // 静默通道升不动（死路/需提权）→ 仅提醒
   if (!list.length) { toast('应用都是最新版 ✓'); return; }
   let modal = document.getElementById('updCenter');
   if (modal) modal.remove();
   modal = document.createElement('div');
   modal.id = 'updCenter';
   modal.className = 'catmodal-pop';
+  const rowIcon = (u) => {
+    const a = DATA.find(x => matchUpdateByName(x, u));
+    return a && a.icon ? `<img class="updcenter__icon" src="${a.icon}">`
+      : `<div class="updcenter__icon updcenter__icon--fb">${escapeHTML((u.name || '?').charAt(0))}</div>`;
+  };
   modal.innerHTML = `
     <div class="catmodal updcenter">
-      <div class="catmodal__title">⬆ 应用升级中心 <span class="updcenter__n">${list.length} 个可升级</span></div>
+      <div class="catmodal__title">⬆ 应用升级中心
+        <span class="updcenter__n">${act.length} 个可升级${remind.length ? ` · ${remind.length} 个仅提醒` : ''}</span>
+      </div>
       <div class="updcenter__list" id="updList">
-        ${list.map((u, i) => {
-          const a = DATA.find(x => matchUpdateByName(x, u));
-          const icon = a && a.icon ? `<img class="updcenter__icon" src="${a.icon}">` : `<div class="updcenter__icon updcenter__icon--fb">${escapeHTML((u.name||'?').charAt(0))}</div>`;
-          return `<label class="updcenter__row" data-i="${i}">
+        ${act.length ? act.map((u, i) => `
+          <label class="updcenter__row" data-i="${i}"${u.hint ? ` title="上次失败：${escapeHTML(u.hint)}"` : ''}>
             <input type="checkbox" checked data-i="${i}">
-            ${icon}
+            ${rowIcon(u)}
             <span class="updcenter__name" title="${escapeHTML(u.name)}">${escapeHTML(u.name)}</span>
             <span class="updcenter__ver">${escapeHTML(u.version)} → <b>${escapeHTML(u.available)}</b></span>
             <span class="updcenter__st" data-i="${i}"></span>
-          </label>`;
-        }).join('')}
+          </label>`).join('') : ''}
+        ${remind.length ? `<div class="updcenter__sep">以下 ${remind.length} 个无法静默升级 · 仅提醒（悬停看原因）</div>` : ''}
+        ${remind.map((u, i) => `
+          <div class="updcenter__row updcenter__row--remind" data-r="${i}" title="${escapeHTML(`${u.reason}：${u.hint}`)}">
+            ${rowIcon(u)}
+            <span class="updcenter__name">${escapeHTML(u.name)}</span>
+            <span class="updcenter__ver">${escapeHTML(u.version)} → <b>${escapeHTML(u.available)}</b></span>
+            <span class="updcenter__why${u.grade === 'admin' ? '' : ' warn'}">${u.grade === 'admin' ? '🔑 需管理员' : '⚠ 静默升级不支持'}</span>
+            ${u.grade === 'admin' ? `<button class="plain updcenter__mini" data-admin="${i}">以管理员升级</button>` : ''}
+            <button class="plain updcenter__mini" data-skipr="${i}">忽略</button>
+          </div>`).join('')}
       </div>
+      ${act.length ? `
       <div class="updcenter__bar">
         <label class="updcenter__all"><input type="checkbox" id="updAll" checked> 全选</label>
         <span class="updcenter__hint">静默升级 · 系统级安装会弹 UAC 请点「是」</span>
-      </div>
+      </div>` : ''}
       <div class="catmodal__btns">
         <button class="plain" data-act="close">关 闭</button>
-        <button data-act="go" id="updGo">一键升级所选 (<span id="updSelN">${list.length}</span>)</button>
+        ${act.length ? `<button data-act="go" id="updGo">一键升级所选 (<span id="updSelN">${act.length}</span>)</button>` : ''}
       </div>
     </div>`;
   document.body.appendChild(modal);
   later(() => modal.classList.add('open'));
   Sound.flip();
 
-  const boxes = () => [...modal.querySelectorAll('.updcenter__row input[type=checkbox]')];
-  const syncN = () => { modal.querySelector('#updSelN').textContent = boxes().filter(b => b.checked).length; };
+  const boxes = () => [...modal.querySelectorAll('.updcenter__row:not(.updcenter__row--remind) input[type=checkbox]')];
+  const syncN = () => { const el = modal.querySelector('#updSelN'); if (el) el.textContent = boxes().filter(b => b.checked).length; };
   modal.addEventListener('change', (e) => {
     if (e.target.id === 'updAll') boxes().forEach(b => { b.checked = e.target.checked; });
     syncN();
@@ -457,10 +474,36 @@ function showUpgradeCenter() {
   modal.addEventListener('click', async (e) => {
     if (e.target === modal) return;   // 批量中不允许误关
     const btn = e.target.closest('button');
-    if (!btn || updBatchRunning) return;
+    if (!btn) return;
+    // ---- 仅提醒区按钮（与批量互不阻塞）----
+    if (btn.dataset.admin !== undefined) {
+      const u = remind[+btn.dataset.admin];
+      btn.disabled = true; const old = btn.textContent; btn.textContent = 'UAC 等待确认…';
+      const r = await window.deck.upgradeAppAdmin({ id: u.id });
+      btn.disabled = false; btn.textContent = old;
+      const row = btn.closest('.updcenter__row');
+      const why = row.querySelector('.updcenter__why');
+      if (r && r.ok) {
+        row.classList.add('done'); why.textContent = '✓ 已升级'; Sound.land();
+        toast(`「${u.name}」已升级到 v${u.available}`);
+        await refreshUpdates(true); updateUpdButton();
+      } else if (r && r.canceled) toast('已取消授权（UAC 点了「否」）');
+      else { row.classList.add('fail'); why.textContent = '✗ 失败'; toast('管理员升级失败：' + ((r && (r.output || r.code)) || '未知')); }
+      return;
+    }
+    if (btn.dataset.skipr !== undefined) {
+      const u = remind[+btn.dataset.skipr];
+      updSkip.add(u.id);
+      localStorage.setItem('ld_upd_skip', JSON.stringify([...updSkip]));
+      btn.closest('.updcenter__row').remove();
+      renderTarot(false); updateUpdButton();
+      toast(`已忽略「${u.name}」的更新提醒`);
+      return;
+    }
+    if (updBatchRunning) return;
     if (btn.dataset.act === 'close') { modal.remove(); return; }
     if (btn.dataset.act === 'go') {
-      const rows = [...modal.querySelectorAll('.updcenter__row')].filter(r => r.querySelector('input').checked);
+      const rows = [...modal.querySelectorAll('.updcenter__row:not(.updcenter__row--remind)')].filter(r => r.querySelector('input').checked);
       if (!rows.length) return;
       updBatchRunning = true;
       modal.querySelector('#updAll').disabled = true;
@@ -470,7 +513,7 @@ function showUpgradeCenter() {
       for (let k = 0; k < rows.length; k++) {
         const row = rows[k];
         const i = +row.dataset.i;
-        const u = list[i];
+        const u = act[i];
         const st = row.querySelector('.updcenter__st');
         row.classList.add('running'); row.classList.remove('done', 'fail');
         st.textContent = '升级中…';
@@ -499,8 +542,8 @@ function showUpgradeCenter() {
         await refreshUpdates(true);
         updateUpdButton();
         // 清单里已消失的失败项（实际成功被误判的）从列表移除
-        modal.querySelectorAll('.updcenter__row').forEach(row => {
-          const u = list[+row.dataset.i];
+        modal.querySelectorAll('.updcenter__row:not(.updcenter__row--remind)').forEach(row => {
+          const u = act[+row.dataset.i];
           if (row.classList.contains('fail') && !UPD.list.some(x => x.id === u.id)) {
             row.classList.remove('fail'); row.classList.add('done');
             row.querySelector('.updcenter__st').textContent = '✓（已复核）';

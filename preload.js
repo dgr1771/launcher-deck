@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('deck', {
   openExternal: (url) => ipcRenderer.invoke('deck:open-external', url),
   checkUpdates: (force) => ipcRenderer.invoke('deck:check-updates', force),
   upgradeApp: (payload) => ipcRenderer.invoke('deck:upgrade-app', payload),
+  upgradeAppAdmin: (payload) => ipcRenderer.invoke('deck:upgrade-app-admin', payload),
   onUpdatesRefresh: (cb) => ipcRenderer.on('deck:updates-refresh', () => cb()),
   onAppsUpdated: (cb) => ipcRenderer.on('deck:apps-updated', () => cb()),
   onShown: (cb) => ipcRenderer.on('deck:shown', () => cb()),
